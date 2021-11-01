@@ -1,0 +1,12 @@
+empty_item_single_line = false
+format_strings = true
+group_imports = "StdExternalCrate"
+hard_tabs = true
+imports_layout = "HorizontalVertical"
+imports_granularity = "Crate"
+newline_style = "Unix"
+normalize_comments = true
+overflow_delimited_expr = true
+reorder_impl_items = true
+struct_lit_single_line = false
+wrap_comments = true
