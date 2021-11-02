@@ -1,0 +1,10 @@
+version: "3"
+services:
+  digit-aoc:
+    build:
+      context: ./
+      dockerfile: ./Dockerfile
+    environment:
+      ROCKET_ADDRESS: '0.0.0.0'
+    ports:
+      - 8000:8000
