@@ -2,6 +2,7 @@ FROM rust:1.55 AS build
 
 WORKDIR /usr/src
 
+RUN apt-get update && apt-get install libpq-dev -y
 RUN rustup default nightly
 
 # Allow caching of dependencies
@@ -18,7 +19,7 @@ RUN cargo install --path .
 
 FROM debian:buster-slim AS run
 # OpenSSL is needed
-RUN apt-get update && apt-get install openssl -y
+RUN apt-get update && apt-get install openssl libpq-dev -y
 # Get the binary
 COPY --from=build /usr/local/cargo/bin/digit-aoc ./digit-aoc
 # Run the binary

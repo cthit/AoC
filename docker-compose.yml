@@ -6,5 +6,13 @@ services:
       dockerfile: ./Dockerfile
     environment:
       ROCKET_ADDRESS: '0.0.0.0'
+      ROCKET_DATABASES: '{ aoc = { url = "postgres://user:password@aoc-db/aoc" } }'
     ports:
       - 8000:8000
+
+  aoc-db:
+    image: postgres:10
+    environment:
+      POSTGRES_DB: aoc
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: password
