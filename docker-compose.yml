@@ -5,6 +5,11 @@ services:
       context: ./
       dockerfile: ./Dockerfile
     environment:
+      GAMMA_CLIENT_ID: id
+      GAMMA_CLIENT_SECRET: secret
+      GAMMA_URL: http://gamma-backend:8081
+      GAMMA_REDIRECT_URL: http://localhost:8081
+      CALLBACK_URL: http://localhost:8000/callback
       ROCKET_ADDRESS: '0.0.0.0'
       ROCKET_DATABASES: '{ aoc = { url = "postgres://user:password@aoc-db/aoc" } }'
     ports:
@@ -16,3 +21,53 @@ services:
       POSTGRES_DB: aoc
       POSTGRES_USER: user
       POSTGRES_PASSWORD: password
+
+  gamma-frontend:
+    image: cthit/gamma-frontend:development
+    environment:
+      HTTP_PROXY: http://gamma-backend:8081
+    depends_on:
+      - gamma-backend
+    ports:
+      - 3000:3000
+
+  gamma-backend:
+    image: cthit/gamma-backend:development
+    environment:
+      DB_USER: user
+      DB_PASSWORD: password
+      DB_HOST: gamma-db
+      DB_PORT: 5432
+      DB_NAME: postgres
+
+      REDIS_HOST: gamma-redis
+      REDIS_PASSWORD: ""
+
+      SERVER_PORT: 8081
+      FRONTEND_REDIRECT_URI: http://localhost:3000/login
+      SUCCESSFUL_LOGIN: http://localhost:3000
+      CORS_ALLOWED_ORIGIN: http://localhost:8000
+      COOKIE_DOMAIN: localhost
+      PRODUCTION: "false"
+
+      IS_MOCKING_CLIENT: "true"
+      DEFAULT_CLIENT_NAME: name
+      DEFAULT_CLIENT_ID: id
+      DEFAULT_CLIENT_SECRET: secret
+      DEFAULT_REDIRECT_URI: http://localhost:8000/callback
+      DEFAULT_API_KEY: key
+    ports:
+      - 8081:8081
+    depends_on:
+      - gamma-db
+      - gamma-redis
+
+  gamma-db:
+    image: postgres:10
+    environment:
+      POSTGRES_USER: user
+      POSTGRES_DB: postgres
+      POSTGRES_PASSWORD: password
+
+  gamma-redis:
+    image: redis:5.0
