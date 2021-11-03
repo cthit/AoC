@@ -19,7 +19,7 @@ use oauth2::{
 	TokenUrl,
 };
 use reqwest::StatusCode;
-use serde::Deserialize;
+use rocket::serde::Deserialize;
 
 pub struct GammaClient {
 	oauth_client: BasicClient,
