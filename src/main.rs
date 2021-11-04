@@ -13,7 +13,7 @@ use std::env;
 
 use db::DbConn;
 use diesel::{expression_methods::ExpressionMethods, query_dsl::QueryDsl, RunQueryDsl};
-use domain::{AocIdRequest, AocIdResponse};
+use domain::{AocIdRequest, AocIdResponse, YearDeleteRequest, YearRequest, YearResponse};
 use gamma::GammaClient;
 use lazy_static::lazy_static;
 use rocket::{
@@ -47,6 +47,8 @@ lazy_static! {
 		GAMMA_URL.to_string(),
 	)
 	.unwrap_or_else(|e| panic!("Failed to create the OAuth client. {}", e));
+	static ref GAMMA_OWNER_GROUP: String =
+		env::var("GAMMA_OWNER_GROUP").expect("Missing the GAMMA_OWNER_GROUP environment variable.");
 }
 
 #[get("/login?<back>")]
@@ -120,6 +122,98 @@ async fn post_aoc_id_json(
 	Ok(Status::Ok)
 }
 
+#[get("/years.json")]
+async fn get_years_json(conn: DbConn) -> Result<Json<Vec<YearResponse>>, Status> {
+	use db::{years, Year};
+
+	let mut years_db: Vec<Year> = conn
+		.run(move |c| years::table.load(c))
+		.await
+		.map_err(|_| Status::InternalServerError)?;
+	Ok(Json(
+		years_db
+			.drain(..)
+			.map(|y| YearResponse {
+				year: y.year,
+				leaderboard: y.leaderboard,
+			})
+			.collect(),
+	))
+}
+
+#[post("/years.json", data = "<data>")]
+async fn post_years_json(
+	data: Json<YearRequest>,
+	conn: DbConn,
+	cookies: &CookieJar<'_>,
+) -> Result<Status, Status> {
+	use db::{years, Year};
+
+	let access_cookie = cookies.get(GAMMA_COOKIE).ok_or(Status::Unauthorized)?;
+	let user = OAUTH_CLIENT
+		.get_user(access_cookie.value().to_string())
+		.await
+		.map_err(|_| Status::Unauthorized)?;
+	if !user
+		.groups
+		.ok_or(Status::Forbidden)?
+		.iter()
+		.any(|g| g.name == *GAMMA_OWNER_GROUP)
+	{
+		return Err(Status::Forbidden);
+	}
+	conn.run(move |c| {
+		diesel::insert_into(years::table)
+			.values(Year {
+				year: data.year,
+				leaderboard: data.leaderboard.clone(),
+			})
+			.on_conflict(years::columns::year)
+			.do_update()
+			.set(years::columns::leaderboard.eq(data.leaderboard.clone()))
+			.execute(c)
+	})
+	.await
+	.map_err(|_| Status::InternalServerError)?;
+	Ok(Status::Ok)
+}
+
+#[delete("/years.json", data = "<data>")]
+async fn delete_years_json(
+	data: Json<YearDeleteRequest>,
+	conn: DbConn,
+	cookies: &CookieJar<'_>,
+) -> Result<Status, Status> {
+	use db::years;
+
+	let access_cookie = cookies.get(GAMMA_COOKIE).ok_or(Status::Unauthorized)?;
+	let user = OAUTH_CLIENT
+		.get_user(access_cookie.value().to_string())
+		.await
+		.map_err(|_| Status::Unauthorized)?;
+	if !user
+		.groups
+		.ok_or(Status::Forbidden)?
+		.iter()
+		.any(|g| g.name == *GAMMA_OWNER_GROUP)
+	{
+		return Err(Status::Forbidden);
+	}
+	let rows_deleted = conn
+		.run(move |c| {
+			diesel::delete(years::table)
+				.filter(years::columns::year.eq(data.year))
+				.execute(c)
+		})
+		.await
+		.map_err(|_| Status::InternalServerError)?;
+	if rows_deleted == 1 {
+		Ok(Status::Ok)
+	} else {
+		Err(Status::NotFound)
+	}
+}
+
 #[get("/callback?<code>&<state>")]
 async fn callback(code: String, state: Option<String>, cookies: &CookieJar<'_>) -> Redirect {
 	match OAUTH_CLIENT.get_token(code).await {
@@ -175,5 +269,8 @@ fn rocket() -> Rocket<Build> {
 			unauthorized,
 			get_aoc_id_json,
 			post_aoc_id_json,
+			get_years_json,
+			post_years_json,
+			delete_years_json,
 		])
 }
