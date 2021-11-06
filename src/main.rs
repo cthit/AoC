@@ -13,7 +13,15 @@ use std::env;
 
 use db::DbConn;
 use diesel::{expression_methods::ExpressionMethods, query_dsl::QueryDsl, RunQueryDsl};
-use domain::{AocIdRequest, AocIdResponse, YearDeleteRequest, YearRequest, YearResponse};
+use domain::{
+	AocIdRequest,
+	AocIdResponse,
+	ParticipateRequest,
+	ParticipateResponse,
+	YearDeleteRequest,
+	YearRequest,
+	YearResponse,
+};
 use gamma::GammaClient;
 use lazy_static::lazy_static;
 use rocket::{
@@ -214,6 +222,99 @@ async fn delete_years_json(
 	}
 }
 
+#[get("/participate.json")]
+async fn get_participate_json(
+	conn: DbConn,
+	cookies: &CookieJar<'_>,
+) -> Result<Json<Vec<ParticipateResponse>>, Status> {
+	use db::{participants, Participant};
+
+	let access_cookie = cookies.get(GAMMA_COOKIE).ok_or(Status::Unauthorized)?;
+	let user = OAUTH_CLIENT
+		.get_user(access_cookie.value().to_string())
+		.await
+		.map_err(|_| Status::Unauthorized)?;
+	let mut participant: Vec<Participant> = conn
+		.run(move |c| {
+			participants::table
+				.filter(participants::columns::cid.eq(user.cid))
+				.load(c)
+		})
+		.await
+		.map_err(|err| match err {
+			diesel::result::Error::NotFound => Status::NotFound,
+			_ => Status::InternalServerError,
+		})?;
+	Ok(Json(
+		participant
+			.drain(..)
+			.map(|p| ParticipateResponse {
+				year: p.year,
+				github: p.github,
+			})
+			.collect(),
+	))
+}
+
+#[post("/participate.json", data = "<data>")]
+async fn post_participate_json(
+	data: Json<ParticipateRequest>,
+	conn: DbConn,
+	cookies: &CookieJar<'_>,
+) -> Result<Status, Status> {
+	use db::{participants, Participant};
+
+	let access_cookie = cookies.get(GAMMA_COOKIE).ok_or(Status::Unauthorized)?;
+	let user = OAUTH_CLIENT
+		.get_user(access_cookie.value().to_string())
+		.await
+		.map_err(|_| Status::Unauthorized)?;
+	conn.run(move |c| {
+		diesel::insert_into(participants::table)
+			.values(Participant {
+				cid: user.cid,
+				year: data.year,
+				github: data.github.clone(),
+			})
+			.on_conflict((participants::columns::cid, participants::columns::year))
+			.do_update()
+			.set(participants::columns::github.eq(data.github.clone()))
+			.execute(c)
+	})
+	.await
+	.map_err(|_| Status::InternalServerError)?;
+	Ok(Status::Ok)
+}
+
+#[delete("/participate.json", data = "<data>")]
+async fn delete_participate_json(
+	data: Json<ParticipateRequest>,
+	conn: DbConn,
+	cookies: &CookieJar<'_>,
+) -> Result<Status, Status> {
+	use db::participants;
+
+	let access_cookie = cookies.get(GAMMA_COOKIE).ok_or(Status::Unauthorized)?;
+	let user = OAUTH_CLIENT
+		.get_user(access_cookie.value().to_string())
+		.await
+		.map_err(|_| Status::Unauthorized)?;
+	let rows_deleted = conn
+		.run(move |c| {
+			diesel::delete(participants::table)
+				.filter(participants::columns::cid.eq(user.cid))
+				.filter(participants::columns::year.eq(data.year))
+				.execute(c)
+		})
+		.await
+		.map_err(|_| Status::InternalServerError)?;
+	if rows_deleted == 1 {
+		Ok(Status::Ok)
+	} else {
+		Err(Status::NotFound)
+	}
+}
+
 #[get("/callback?<code>&<state>")]
 async fn callback(code: String, state: Option<String>, cookies: &CookieJar<'_>) -> Redirect {
 	match OAUTH_CLIENT.get_token(code).await {
@@ -272,5 +373,8 @@ fn rocket() -> Rocket<Build> {
 			get_years_json,
 			post_years_json,
 			delete_years_json,
+			get_participate_json,
+			post_participate_json,
+			delete_participate_json,
 		])
 }

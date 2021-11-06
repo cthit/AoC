@@ -22,3 +22,13 @@ pub type YearResponse = YearRequest;
 pub struct YearDeleteRequest {
 	pub year: i32,
 }
+
+#[derive(Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ParticipateRequest {
+	pub year: i32,
+	#[serde(default)]
+	pub github: Option<String>,
+}
+
+pub type ParticipateResponse = ParticipateRequest;
