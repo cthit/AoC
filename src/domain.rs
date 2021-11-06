@@ -32,3 +32,13 @@ pub struct ParticipateRequest {
 }
 
 pub type ParticipateResponse = ParticipateRequest;
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LeaderboardResponse {
+	pub cid: String,
+	pub nick: String,
+	pub avatar_url: String,
+	pub github: Option<String>,
+	pub score: u16,
+}

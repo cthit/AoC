@@ -61,6 +61,9 @@ pub struct Participant {
 	pub github: Option<String>,
 }
 
+joinable!(participants -> users (cid));
+allow_tables_to_appear_in_same_query!(participants, users);
+
 pub async fn initialize(rocket: &rocket::Rocket<rocket::Orbit>) -> Result<(), String> {
 	let conn = DbConn::get_one(rocket)
 		.await

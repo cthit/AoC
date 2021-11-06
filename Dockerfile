@@ -2,7 +2,7 @@ FROM rust:1.55 AS build
 
 WORKDIR /usr/src
 
-RUN apt-get update && apt-get install libpq-dev -y
+RUN apt-get update && apt-get install libpq-dev ca-certificates -y && update-ca-certificates
 RUN rustup default nightly
 
 # Allow caching of dependencies
@@ -20,6 +20,7 @@ RUN cargo install --path .
 FROM debian:buster-slim AS run
 # OpenSSL is needed
 RUN apt-get update && apt-get install openssl libpq-dev -y
+COPY --from=build /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
 # Get the binary
 COPY --from=build /usr/local/cargo/bin/digit-aoc ./digit-aoc
 # Run the binary

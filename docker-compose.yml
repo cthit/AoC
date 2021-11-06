@@ -11,6 +11,8 @@ services:
       GAMMA_REDIRECT_URL: http://localhost:8081
       CALLBACK_URL: http://localhost:8000/callback
       GAMMA_OWNER_GROUP: superadmin
+      GAMMA_API_KEY: key
+      AOC_SESSION: session
       ROCKET_ADDRESS: '0.0.0.0'
       ROCKET_DATABASES: '{ aoc = { url = "postgres://user:password@aoc-db/aoc" } }'
     ports:

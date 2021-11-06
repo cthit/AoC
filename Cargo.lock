@@ -258,6 +258,7 @@ name = "digit-aoc"
 version = "0.1.0"
 dependencies = [
  "diesel",
+ "futures",
  "lazy_static",
  "oauth2",
  "reqwest",

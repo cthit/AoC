@@ -23,7 +23,9 @@ use rocket::serde::Deserialize;
 
 pub struct GammaClient {
 	oauth_client: BasicClient,
+	reqwest_client: reqwest::Client,
 	api_base: String,
+	api_key: String,
 }
 
 impl GammaClient {
@@ -33,6 +35,7 @@ impl GammaClient {
 		redirect_url: String,
 		callback_url: String,
 		api_base: String,
+		api_key: String,
 	) -> Result<Self, String> {
 		let auth_url = format!("{}/api/oauth/authorize", redirect_url);
 		let token_url = format!("{}/oauth/token", api_base);
@@ -55,7 +58,9 @@ impl GammaClient {
 					format!("Invalid redirect URL. (Attempt: \"{}\")", callback_url)
 				})?,
 			),
+			reqwest_client: reqwest::Client::new(),
 			api_base,
+			api_key,
 		})
 	}
 
@@ -92,14 +97,30 @@ impl GammaClient {
 		Ok(token_response.access_token().secret().clone())
 	}
 
-	pub async fn get_user(
+	pub async fn get_me(
 		&self,
-		token: String,
+		token: &str,
 	) -> Result<ITUser, GammaError<reqwest::Error, reqwest::Error, reqwest::Error, reqwest::Error>>
 	{
-		reqwest::Client::new()
+		self.reqwest_client
 			.get(&format!("{}/users/me", self.api_base))
 			.header("Authorization", format!("Bearer {}", token))
+			.send()
+			.await
+			.map_err(GammaError::from)?
+			.json::<ITUser>()
+			.await
+			.map_err(GammaError::from)
+	}
+
+	pub async fn get_user(
+		&self,
+		cid: &str,
+	) -> Result<ITUser, GammaError<reqwest::Error, reqwest::Error, reqwest::Error, reqwest::Error>>
+	{
+		self.reqwest_client
+			.get(&format!("{}/users/{}", self.api_base, cid))
+			.header("Authorization", format!("pre-shared {}", self.api_key))
 			.send()
 			.await
 			.map_err(GammaError::from)?
@@ -185,7 +206,8 @@ pub struct ITUser {
 	pub nick: String,
 	pub avatar_url: String,
 	pub acceptance_year: u16,
-	pub language: String,
+	#[serde(default)]
+	pub language: Option<String>,
 	pub groups: Option<Vec<FKITGroup>>,
 }
 
