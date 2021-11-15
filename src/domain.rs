@@ -42,3 +42,13 @@ pub struct LeaderboardResponse {
 	pub github: Option<String>,
 	pub score: u16,
 }
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LeaderboardSplitsResponse {
+	pub cid: String,
+	pub nick: String,
+	pub avatar_url: String,
+	pub github: Option<String>,
+	pub split_average: u64,
+}
