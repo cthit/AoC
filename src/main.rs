@@ -4,6 +4,7 @@ mod aoc_client;
 mod db;
 mod domain;
 mod gamma;
+mod github_client;
 
 #[macro_use]
 extern crate diesel;
@@ -18,6 +19,7 @@ use diesel::{expression_methods::ExpressionMethods, query_dsl::QueryDsl, RunQuer
 use domain::{
 	AocIdRequest,
 	AocIdResponse,
+	LeaderboardLanguagesResponse,
 	LeaderboardResponse,
 	LeaderboardSplitsResponse,
 	ParticipateRequest,
@@ -27,6 +29,7 @@ use domain::{
 	YearResponse,
 };
 use gamma::GammaClient;
+use github_client::GitHubClient;
 use lazy_static::lazy_static;
 use rocket::{
 	fairing::AdHoc,
@@ -67,6 +70,14 @@ lazy_static! {
 	static ref AOC_SESSION: String =
 		env::var("AOC_SESSION").expect("Missing the AOC_SESSION environment variable.");
 	static ref AOC_CLIENT: AocClient = AocClient::new(AOC_SESSION.to_string());
+	static ref GITHUB_CLIENT_ID: String =
+		env::var("GITHUB_CLIENT_ID").expect("Missing the GITHUB_CLIENT_ID environment variable.");
+	static ref GITHUB_CLIENT_SECRET: String = env::var("GITHUB_CLIENT_SECRET")
+		.expect("Missing the GITHUB_CLIENT_SECRET environment variable.");
+	static ref GITHUB_CLIENT: GitHubClient = GitHubClient::new(
+		GITHUB_CLIENT_ID.to_string(),
+		GITHUB_CLIENT_SECRET.to_string()
+	);
 }
 
 #[get("/login?<back>")]
@@ -465,6 +476,44 @@ async fn get_leaderboard_year_splits_json(
 	Ok(Json(response))
 }
 
+#[get("/leaderboard/<year>/languages.json")]
+async fn get_leaderboard_year_languages_json(
+	year: i32,
+	conn: DbConn,
+) -> Result<Json<Vec<LeaderboardLanguagesResponse>>, Status> {
+	use db::{participants, users, Participant, User};
+
+	let mut participants: Vec<(Participant, User)> = conn
+		.run(move |c| {
+			participants::table
+				.inner_join(users::table)
+				.filter(participants::columns::year.eq(year))
+				.filter(participants::columns::github.is_not_null())
+				.load(c)
+		})
+		.await
+		.map_err(|_| Status::InternalServerError)?;
+
+	let mut response =
+		futures::future::join_all(participants.drain(..).map(async move |(p, u)| {
+			let user = OAUTH_CLIENT.get_user(&u.cid).await.unwrap();
+			let languages = GITHUB_CLIENT
+				.get_languages(p.github.as_ref().unwrap())
+				.await
+				.unwrap();
+			LeaderboardLanguagesResponse {
+				cid: u.cid.clone(),
+				nick: user.nick,
+				avatar_url: user.avatar_url,
+				github: p.github,
+				languages: languages.into_keys().collect(),
+			}
+		}))
+		.await;
+	response.sort_by_key(|lr| Reverse(lr.languages.len()));
+	Ok(Json(response))
+}
+
 #[get("/callback?<code>&<state>")]
 async fn callback(code: String, state: Option<String>, cookies: &CookieJar<'_>) -> Redirect {
 	match OAUTH_CLIENT.get_token(code).await {
@@ -528,5 +577,6 @@ fn rocket() -> Rocket<Build> {
 			delete_participate_json,
 			get_leaderboard_year_json,
 			get_leaderboard_year_splits_json,
+			get_leaderboard_year_languages_json,
 		])
 }

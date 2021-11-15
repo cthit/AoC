@@ -52,3 +52,13 @@ pub struct LeaderboardSplitsResponse {
 	pub github: Option<String>,
 	pub split_average: u64,
 }
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LeaderboardLanguagesResponse {
+	pub cid: String,
+	pub nick: String,
+	pub avatar_url: String,
+	pub github: Option<String>,
+	pub languages: Vec<String>,
+}
