@@ -33,7 +33,7 @@ use github_client::GitHubClient;
 use lazy_static::lazy_static;
 use rocket::{
 	fairing::AdHoc,
-	http::{Cookie, CookieJar, Status},
+	http::{uri::Origin, Cookie, CookieJar, Status},
 	response::Redirect,
 	serde::json::Json,
 	Build,
@@ -515,17 +515,26 @@ async fn get_leaderboard_year_languages_json(
 }
 
 #[get("/callback?<code>&<state>")]
-async fn callback(code: String, state: Option<String>, cookies: &CookieJar<'_>) -> Redirect {
-	match OAUTH_CLIENT.get_token(code).await {
-		Ok(access_token) => match OAUTH_CLIENT.get_me(&access_token).await {
-			Ok(_) => {
-				cookies.add(Cookie::build(GAMMA_COOKIE, access_token).path("/").finish());
-				Redirect::to(state.unwrap_or_else(|| "/".to_string()))
-			}
-			Err(err) => Redirect::to(uri!(unauthorized(Some(err.to_string())))),
-		},
-		Err(err) => Redirect::to(uri!(unauthorized(Some(err.to_string())))),
-	}
+async fn callback(
+	code: String,
+	state: Option<String>,
+	cookies: &CookieJar<'_>,
+) -> Result<Redirect, Status> {
+	let access_token = OAUTH_CLIENT
+		.get_token(code)
+		.await
+		.map_err(|_| Status::Unauthorized)?;
+	OAUTH_CLIENT
+		.get_me(&access_token)
+		.await
+		.map_err(|_| Status::Unauthorized)?;
+	cookies.add(Cookie::build(GAMMA_COOKIE, access_token).path("/").finish());
+	Ok(Redirect::to(
+		state
+			.map(|s| Origin::parse_owned(s).ok())
+			.flatten()
+			.unwrap_or(uri!(index)),
+	))
 }
 
 #[get("/callback?<error>&<error_description>", rank = 2)]
@@ -534,11 +543,6 @@ async fn callback_error(error: String, error_description: Option<String>) -> Str
 		Some(desc) => format!("{}\n{}", error, desc),
 		None => error,
 	}
-}
-
-#[get("/unauthorized?<reason>")]
-fn unauthorized(reason: Option<String>) -> String {
-	reason.unwrap_or_else(|| "Unauthorized".to_string())
 }
 
 #[get("/")]
@@ -566,7 +570,6 @@ fn rocket() -> Rocket<Build> {
 			login,
 			callback,
 			callback_error,
-			unauthorized,
 			get_aoc_id_json,
 			post_aoc_id_json,
 			get_years_json,
