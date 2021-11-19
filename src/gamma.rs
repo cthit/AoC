@@ -1,8 +1,10 @@
 use std::{
+	env,
 	error::Error,
 	fmt::{self, Display, Formatter},
 };
 
+use lazy_static::lazy_static;
 use oauth2::{
 	basic::{BasicClient, BasicErrorResponseType},
 	reqwest::async_http_client,
@@ -19,7 +21,41 @@ use oauth2::{
 	TokenUrl,
 };
 use reqwest::StatusCode;
-use rocket::serde::Deserialize;
+use rocket::{
+	request::{FromRequest, Outcome},
+	serde::Deserialize,
+	Request,
+};
+
+lazy_static! {
+	static ref GAMMA_CLIENT_ID: String =
+		env::var("GAMMA_CLIENT_ID").expect("Missing the GAMMA_CLIENT_ID environment variable.");
+	static ref GAMMA_CLIENT_SECRET: String = env::var("GAMMA_CLIENT_SECRET")
+		.expect("Missing the GAMMA_CLIENT_SECRET environment variable.");
+	static ref GAMMA_REDIRECT_URL: String = env::var("GAMMA_REDIRECT_URL")
+		.expect("Missing the GAMMA_REDIRECT_URL environment variable.");
+	static ref CALLBACK_URL: String =
+		env::var("CALLBACK_URL").expect("Missing the CALLBACK_URL environment variable.");
+	static ref GAMMA_URL: String = format!(
+		"{}/api",
+		env::var("GAMMA_URL").expect("Missing the GAMMA_URL environment variable.")
+	);
+	static ref GAMMA_API_KEY: String =
+		env::var("GAMMA_API_KEY").expect("Missing the GAMMA_API_KEY environment variable.");
+	static ref GAMMA_CLIENT: GammaClient = GammaClient::new(
+		GAMMA_CLIENT_ID.to_string(),
+		GAMMA_CLIENT_SECRET.to_string(),
+		GAMMA_REDIRECT_URL.to_string(),
+		CALLBACK_URL.to_string(),
+		GAMMA_URL.to_string(),
+		GAMMA_API_KEY.to_string(),
+	)
+	.unwrap_or_else(|e| panic!("Failed to create the OAuth client. {}", e));
+	static ref GAMMA_COOKIE: String =
+		env::var("GAMMA_COOKIE").expect("Missing the GAMMA_COOKIE environment variable.");
+	static ref GAMMA_OWNER_GROUP: String =
+		env::var("GAMMA_OWNER_GROUP").expect("Missing the GAMMA_OWNER_GROUP environment variable.");
+}
 
 pub struct GammaClient {
 	oauth_client: BasicClient,
@@ -127,6 +163,23 @@ impl GammaClient {
 			.json::<ITUser>()
 			.await
 			.map_err(GammaError::from)
+	}
+
+	pub fn cookie() -> &'static str {
+		&GAMMA_COOKIE
+	}
+
+	pub fn owner_group() -> &'static str {
+		&GAMMA_OWNER_GROUP
+	}
+}
+
+#[rocket::async_trait]
+impl<'r> FromRequest<'r> for &'static GammaClient {
+	type Error = ();
+
+	async fn from_request(_request: &'r Request<'_>) -> Outcome<Self, Self::Error> {
+		Outcome::Success(&GAMMA_CLIENT)
 	}
 }
 

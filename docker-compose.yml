@@ -12,6 +12,7 @@ services:
       CALLBACK_URL: http://localhost:8000/callback
       GAMMA_OWNER_GROUP: superadmin
       GAMMA_API_KEY: key
+      GAMMA_COOKIE: gamma
       AOC_SESSION: session
       GITHUB_CLIENT_ID: id
       GITHUB_CLIENT_SECRET: secret

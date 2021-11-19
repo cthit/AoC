@@ -11,7 +11,7 @@ extern crate diesel;
 #[macro_use]
 extern crate rocket;
 
-use std::{cmp::Reverse, env, time::SystemTime};
+use std::{cmp::Reverse, time::SystemTime};
 
 use aoc_client::AocClient;
 use db::DbConn;
@@ -30,7 +30,6 @@ use domain::{
 };
 use gamma::GammaClient;
 use github_client::GitHubClient;
-use lazy_static::lazy_static;
 use rocket::{
 	fairing::AdHoc,
 	http::{uri::Origin, Cookie, CookieJar, Status},
@@ -40,65 +39,32 @@ use rocket::{
 	Rocket,
 };
 
-static GAMMA_COOKIE: &str = "gamma";
-lazy_static! {
-	static ref GAMMA_CLIENT_ID: String =
-		env::var("GAMMA_CLIENT_ID").expect("Missing the GAMMA_CLIENT_ID environment variable.");
-	static ref GAMMA_CLIENT_SECRET: String = env::var("GAMMA_CLIENT_SECRET")
-		.expect("Missing the GAMMA_CLIENT_SECRET environment variable.");
-	static ref GAMMA_REDIRECT_URL: String = env::var("GAMMA_REDIRECT_URL")
-		.expect("Missing the GAMMA_REDIRECT_URL environment variable.");
-	static ref CALLBACK_URL: String =
-		env::var("CALLBACK_URL").expect("Missing the CALLBACK_URL environment variable.");
-	static ref GAMMA_URL: String = format!(
-		"{}/api",
-		env::var("GAMMA_URL").expect("Missing the GAMMA_URL environment variable.")
-	);
-	static ref GAMMA_API_KEY: String =
-		env::var("GAMMA_API_KEY").expect("Missing the GAMMA_API_KEY environment variable.");
-	static ref OAUTH_CLIENT: GammaClient = GammaClient::new(
-		GAMMA_CLIENT_ID.to_string(),
-		GAMMA_CLIENT_SECRET.to_string(),
-		GAMMA_REDIRECT_URL.to_string(),
-		CALLBACK_URL.to_string(),
-		GAMMA_URL.to_string(),
-		GAMMA_API_KEY.to_string(),
-	)
-	.unwrap_or_else(|e| panic!("Failed to create the OAuth client. {}", e));
-	static ref GAMMA_OWNER_GROUP: String =
-		env::var("GAMMA_OWNER_GROUP").expect("Missing the GAMMA_OWNER_GROUP environment variable.");
-	static ref AOC_SESSION: String =
-		env::var("AOC_SESSION").expect("Missing the AOC_SESSION environment variable.");
-	static ref AOC_CLIENT: AocClient = AocClient::new(AOC_SESSION.to_string());
-	static ref GITHUB_CLIENT_ID: String =
-		env::var("GITHUB_CLIENT_ID").expect("Missing the GITHUB_CLIENT_ID environment variable.");
-	static ref GITHUB_CLIENT_SECRET: String = env::var("GITHUB_CLIENT_SECRET")
-		.expect("Missing the GITHUB_CLIENT_SECRET environment variable.");
-	static ref GITHUB_CLIENT: GitHubClient = GitHubClient::new(
-		GITHUB_CLIENT_ID.to_string(),
-		GITHUB_CLIENT_SECRET.to_string()
-	);
-}
-
 #[get("/login?<back>")]
-async fn login(back: Option<String>, cookies: &CookieJar<'_>) -> Redirect {
-	if let Some(access_cookie) = cookies.get(GAMMA_COOKIE) {
-		if OAUTH_CLIENT.get_me(access_cookie.value()).await.is_ok() {
+async fn login(
+	back: Option<String>,
+	cookies: &CookieJar<'_>,
+	gamma_client: &GammaClient,
+) -> Redirect {
+	if let Some(access_cookie) = cookies.get(GammaClient::cookie()) {
+		if gamma_client.get_me(access_cookie.value()).await.is_ok() {
 			return Redirect::to(back.unwrap_or_else(|| "/".to_string()));
 		}
 	}
-	Redirect::to(OAUTH_CLIENT.authorize_url(back.unwrap_or_else(|| "/".to_string())))
+	Redirect::to(gamma_client.authorize_url(back.unwrap_or_else(|| "/".to_string())))
 }
 
 #[get("/aoc-id.json")]
 async fn get_aoc_id_json(
 	conn: DbConn,
 	cookies: &CookieJar<'_>,
+	gamma_client: &GammaClient,
 ) -> Result<Json<AocIdResponse>, Status> {
 	use db::{users, User};
 
-	let access_cookie = cookies.get(GAMMA_COOKIE).ok_or(Status::Unauthorized)?;
-	let user = OAUTH_CLIENT
+	let access_cookie = cookies
+		.get(GammaClient::cookie())
+		.ok_or(Status::Unauthorized)?;
+	let user = gamma_client
 		.get_me(access_cookie.value())
 		.await
 		.map_err(|_| Status::Unauthorized)?;
@@ -123,11 +89,14 @@ async fn post_aoc_id_json(
 	data: Json<AocIdRequest>,
 	conn: DbConn,
 	cookies: &CookieJar<'_>,
+	gamma_client: &GammaClient,
 ) -> Result<Status, Status> {
 	use db::{users, User};
 
-	let access_cookie = cookies.get(GAMMA_COOKIE).ok_or(Status::Unauthorized)?;
-	let user = OAUTH_CLIENT
+	let access_cookie = cookies
+		.get(GammaClient::cookie())
+		.ok_or(Status::Unauthorized)?;
+	let user = gamma_client
 		.get_me(access_cookie.value())
 		.await
 		.map_err(|_| Status::Unauthorized)?;
@@ -171,11 +140,14 @@ async fn post_years_json(
 	data: Json<YearRequest>,
 	conn: DbConn,
 	cookies: &CookieJar<'_>,
+	gamma_client: &GammaClient,
 ) -> Result<Status, Status> {
 	use db::{years, Year};
 
-	let access_cookie = cookies.get(GAMMA_COOKIE).ok_or(Status::Unauthorized)?;
-	let user = OAUTH_CLIENT
+	let access_cookie = cookies
+		.get(GammaClient::cookie())
+		.ok_or(Status::Unauthorized)?;
+	let user = gamma_client
 		.get_me(access_cookie.value())
 		.await
 		.map_err(|_| Status::Unauthorized)?;
@@ -183,7 +155,7 @@ async fn post_years_json(
 		.groups
 		.ok_or(Status::Forbidden)?
 		.iter()
-		.any(|g| g.name == *GAMMA_OWNER_GROUP)
+		.any(|g| g.name == GammaClient::owner_group())
 	{
 		return Err(Status::Forbidden);
 	}
@@ -208,11 +180,14 @@ async fn delete_years_json(
 	data: Json<YearDeleteRequest>,
 	conn: DbConn,
 	cookies: &CookieJar<'_>,
+	gamma_client: &GammaClient,
 ) -> Result<Status, Status> {
 	use db::years;
 
-	let access_cookie = cookies.get(GAMMA_COOKIE).ok_or(Status::Unauthorized)?;
-	let user = OAUTH_CLIENT
+	let access_cookie = cookies
+		.get(GammaClient::cookie())
+		.ok_or(Status::Unauthorized)?;
+	let user = gamma_client
 		.get_me(access_cookie.value())
 		.await
 		.map_err(|_| Status::Unauthorized)?;
@@ -220,7 +195,7 @@ async fn delete_years_json(
 		.groups
 		.ok_or(Status::Forbidden)?
 		.iter()
-		.any(|g| g.name == *GAMMA_OWNER_GROUP)
+		.any(|g| g.name == GammaClient::owner_group())
 	{
 		return Err(Status::Forbidden);
 	}
@@ -243,11 +218,14 @@ async fn delete_years_json(
 async fn get_participate_json(
 	conn: DbConn,
 	cookies: &CookieJar<'_>,
+	gamma_client: &GammaClient,
 ) -> Result<Json<Vec<ParticipateResponse>>, Status> {
 	use db::{participants, Participant};
 
-	let access_cookie = cookies.get(GAMMA_COOKIE).ok_or(Status::Unauthorized)?;
-	let user = OAUTH_CLIENT
+	let access_cookie = cookies
+		.get(GammaClient::cookie())
+		.ok_or(Status::Unauthorized)?;
+	let user = gamma_client
 		.get_me(access_cookie.value())
 		.await
 		.map_err(|_| Status::Unauthorized)?;
@@ -278,11 +256,14 @@ async fn post_participate_json(
 	data: Json<ParticipateRequest>,
 	conn: DbConn,
 	cookies: &CookieJar<'_>,
+	gamma_client: &GammaClient,
 ) -> Result<Status, Status> {
 	use db::{participants, Participant};
 
-	let access_cookie = cookies.get(GAMMA_COOKIE).ok_or(Status::Unauthorized)?;
-	let user = OAUTH_CLIENT
+	let access_cookie = cookies
+		.get(GammaClient::cookie())
+		.ok_or(Status::Unauthorized)?;
+	let user = gamma_client
 		.get_me(access_cookie.value())
 		.await
 		.map_err(|_| Status::Unauthorized)?;
@@ -308,11 +289,14 @@ async fn delete_participate_json(
 	data: Json<ParticipateRequest>,
 	conn: DbConn,
 	cookies: &CookieJar<'_>,
+	gamma_client: &GammaClient,
 ) -> Result<Status, Status> {
 	use db::participants;
 
-	let access_cookie = cookies.get(GAMMA_COOKIE).ok_or(Status::Unauthorized)?;
-	let user = OAUTH_CLIENT
+	let access_cookie = cookies
+		.get(GammaClient::cookie())
+		.ok_or(Status::Unauthorized)?;
+	let user = gamma_client
 		.get_me(access_cookie.value())
 		.await
 		.map_err(|_| Status::Unauthorized)?;
@@ -336,6 +320,8 @@ async fn delete_participate_json(
 async fn get_leaderboard_year_json(
 	mut year: String,
 	conn: DbConn,
+	aoc_client: &AocClient,
+	gamma_client: &GammaClient,
 ) -> Result<Json<Vec<LeaderboardResponse>>, Status> {
 	use db::{participants, users, years, Participant, User, Year};
 
@@ -357,7 +343,7 @@ async fn get_leaderboard_year_json(
 			Status::NotFound
 		})?;
 
-	let leaderboard = AOC_CLIENT
+	let leaderboard = aoc_client
 		.get_leaderboard(year, &year_db.leaderboard)
 		.await
 		.map_err(|err| {
@@ -386,7 +372,7 @@ async fn get_leaderboard_year_json(
 				score: leaderboard.members[&u.aoc_id].local_score,
 			})
 			.map(async move |mut lr| {
-				let user = OAUTH_CLIENT.get_user(&lr.cid).await.unwrap();
+				let user = gamma_client.get_user(&lr.cid).await.unwrap();
 				lr.nick.push_str(&user.nick);
 				lr.avatar_url.push_str(&user.avatar_url);
 				lr
@@ -401,6 +387,8 @@ async fn get_leaderboard_year_json(
 async fn get_leaderboard_year_splits_json(
 	year: i32,
 	conn: DbConn,
+	aoc_client: &AocClient,
+	gamma_client: &GammaClient,
 ) -> Result<Json<Vec<LeaderboardSplitsResponse>>, Status> {
 	use db::{participants, users, years, Participant, User, Year};
 
@@ -412,7 +400,7 @@ async fn get_leaderboard_year_splits_json(
 			Status::NotFound
 		})?;
 
-	let leaderboard = AOC_CLIENT
+	let leaderboard = aoc_client
 		.get_leaderboard(year, &year_db.leaderboard)
 		.await
 		.map_err(|err| {
@@ -465,7 +453,7 @@ async fn get_leaderboard_year_splits_json(
 				}
 			})
 			.map(async move |mut lr| {
-				let user = OAUTH_CLIENT.get_user(&lr.cid).await.unwrap();
+				let user = gamma_client.get_user(&lr.cid).await.unwrap();
 				lr.nick.push_str(&user.nick);
 				lr.avatar_url.push_str(&user.avatar_url);
 				lr
@@ -480,6 +468,8 @@ async fn get_leaderboard_year_splits_json(
 async fn get_leaderboard_year_languages_json(
 	year: i32,
 	conn: DbConn,
+	gamma_client: &GammaClient,
+	github_client: &GitHubClient,
 ) -> Result<Json<Vec<LeaderboardLanguagesResponse>>, Status> {
 	use db::{participants, users, Participant, User};
 
@@ -496,8 +486,8 @@ async fn get_leaderboard_year_languages_json(
 
 	let mut response =
 		futures::future::join_all(participants.drain(..).map(async move |(p, u)| {
-			let user = OAUTH_CLIENT.get_user(&u.cid).await.unwrap();
-			let languages = GITHUB_CLIENT
+			let user = gamma_client.get_user(&u.cid).await.unwrap();
+			let languages = github_client
 				.get_languages(p.github.as_ref().unwrap())
 				.await
 				.unwrap();
@@ -519,16 +509,21 @@ async fn callback(
 	code: String,
 	state: Option<String>,
 	cookies: &CookieJar<'_>,
+	gamma_client: &GammaClient,
 ) -> Result<Redirect, Status> {
-	let access_token = OAUTH_CLIENT
+	let access_token = gamma_client
 		.get_token(code)
 		.await
 		.map_err(|_| Status::Unauthorized)?;
-	OAUTH_CLIENT
+	gamma_client
 		.get_me(&access_token)
 		.await
 		.map_err(|_| Status::Unauthorized)?;
-	cookies.add(Cookie::build(GAMMA_COOKIE, access_token).path("/").finish());
+	cookies.add(
+		Cookie::build(GammaClient::cookie(), access_token)
+			.path("/")
+			.finish(),
+	);
 	Ok(Redirect::to(
 		state
 			.map(|s| Origin::parse_owned(s).ok())

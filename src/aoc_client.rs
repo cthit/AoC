@@ -1,7 +1,18 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, env};
 
+use lazy_static::lazy_static;
 use reqwest::{Client, Error};
+use rocket::{
+	request::{FromRequest, Outcome},
+	Request,
+};
 use serde::{Deserialize, Serialize};
+
+lazy_static! {
+	static ref AOC_SESSION: String =
+		env::var("AOC_SESSION").expect("Missing the AOC_SESSION environment variable.");
+	static ref AOC_CLIENT: AocClient = AocClient::new(AOC_SESSION.to_string());
+}
 
 pub struct AocClient {
 	session: String,
@@ -31,6 +42,15 @@ impl AocClient {
 			.await?
 			.json()
 			.await
+	}
+}
+
+#[rocket::async_trait]
+impl<'r> FromRequest<'r> for &'static AocClient {
+	type Error = ();
+
+	async fn from_request(_request: &'r Request<'_>) -> Outcome<Self, Self::Error> {
+		Outcome::Success(&AOC_CLIENT)
 	}
 }
 
