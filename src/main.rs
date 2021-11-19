@@ -11,17 +11,26 @@ extern crate diesel;
 #[macro_use]
 extern crate rocket;
 
-use std::{cmp::Reverse, time::SystemTime};
-
 use aoc_client::AocClient;
 use db::DbConn;
-use diesel::{expression_methods::ExpressionMethods, query_dsl::QueryDsl, RunQueryDsl};
 use domain::{
+	delete_participation,
+	delete_year,
+	get_aoc_id,
+	get_leaderboard,
+	get_leaderboard_languages,
+	get_leaderboard_splits,
+	get_participations,
+	get_years,
+	set_aoc_id,
+	set_participation,
+	set_year,
 	AocIdRequest,
 	AocIdResponse,
 	LeaderboardLanguagesResponse,
 	LeaderboardResponse,
 	LeaderboardSplitsResponse,
+	ParticipateDeleteRequest,
 	ParticipateRequest,
 	ParticipateResponse,
 	YearDeleteRequest,
@@ -59,29 +68,7 @@ async fn get_aoc_id_json(
 	cookies: &CookieJar<'_>,
 	gamma_client: &GammaClient,
 ) -> Result<Json<AocIdResponse>, Status> {
-	use db::{users, User};
-
-	let access_cookie = cookies
-		.get(GammaClient::cookie())
-		.ok_or(Status::Unauthorized)?;
-	let user = gamma_client
-		.get_me(access_cookie.value())
-		.await
-		.map_err(|_| Status::Unauthorized)?;
-	let user_db: User = conn
-		.run(move |c| {
-			users::table
-				.filter(users::columns::cid.eq(user.cid))
-				.first(c)
-		})
-		.await
-		.map_err(|err| match err {
-			diesel::result::Error::NotFound => Status::NotFound,
-			_ => Status::InternalServerError,
-		})?;
-	Ok(Json(AocIdResponse {
-		aoc_id: user_db.aoc_id,
-	}))
+	get_aoc_id(&conn, cookies, gamma_client).await.map(Json)
 }
 
 #[post("/aoc-id.json", data = "<data>")]
@@ -91,48 +78,14 @@ async fn post_aoc_id_json(
 	cookies: &CookieJar<'_>,
 	gamma_client: &GammaClient,
 ) -> Result<Status, Status> {
-	use db::{users, User};
-
-	let access_cookie = cookies
-		.get(GammaClient::cookie())
-		.ok_or(Status::Unauthorized)?;
-	let user = gamma_client
-		.get_me(access_cookie.value())
+	set_aoc_id(data.aoc_id.clone(), &conn, cookies, gamma_client)
 		.await
-		.map_err(|_| Status::Unauthorized)?;
-	conn.run(move |c| {
-		diesel::insert_into(users::table)
-			.values(User {
-				cid: user.cid,
-				aoc_id: data.aoc_id.clone(),
-			})
-			.on_conflict(users::columns::cid)
-			.do_update()
-			.set(users::columns::aoc_id.eq(data.aoc_id.clone()))
-			.execute(c)
-	})
-	.await
-	.map_err(|_| Status::InternalServerError)?;
-	Ok(Status::Ok)
+		.map(|_| Status::Ok)
 }
 
 #[get("/years.json")]
 async fn get_years_json(conn: DbConn) -> Result<Json<Vec<YearResponse>>, Status> {
-	use db::{years, Year};
-
-	let mut years_db: Vec<Year> = conn
-		.run(move |c| years::table.load(c))
-		.await
-		.map_err(|_| Status::InternalServerError)?;
-	Ok(Json(
-		years_db
-			.drain(..)
-			.map(|y| YearResponse {
-				year: y.year,
-				leaderboard: y.leaderboard,
-			})
-			.collect(),
-	))
+	get_years(&conn).await.map(Json)
 }
 
 #[post("/years.json", data = "<data>")]
@@ -142,37 +95,9 @@ async fn post_years_json(
 	cookies: &CookieJar<'_>,
 	gamma_client: &GammaClient,
 ) -> Result<Status, Status> {
-	use db::{years, Year};
-
-	let access_cookie = cookies
-		.get(GammaClient::cookie())
-		.ok_or(Status::Unauthorized)?;
-	let user = gamma_client
-		.get_me(access_cookie.value())
+	set_year(data.0, &conn, cookies, gamma_client)
 		.await
-		.map_err(|_| Status::Unauthorized)?;
-	if !user
-		.groups
-		.ok_or(Status::Forbidden)?
-		.iter()
-		.any(|g| g.name == GammaClient::owner_group())
-	{
-		return Err(Status::Forbidden);
-	}
-	conn.run(move |c| {
-		diesel::insert_into(years::table)
-			.values(Year {
-				year: data.year,
-				leaderboard: data.leaderboard.clone(),
-			})
-			.on_conflict(years::columns::year)
-			.do_update()
-			.set(years::columns::leaderboard.eq(data.leaderboard.clone()))
-			.execute(c)
-	})
-	.await
-	.map_err(|_| Status::InternalServerError)?;
-	Ok(Status::Ok)
+		.map(|_| Status::Ok)
 }
 
 #[delete("/years.json", data = "<data>")]
@@ -182,36 +107,9 @@ async fn delete_years_json(
 	cookies: &CookieJar<'_>,
 	gamma_client: &GammaClient,
 ) -> Result<Status, Status> {
-	use db::years;
-
-	let access_cookie = cookies
-		.get(GammaClient::cookie())
-		.ok_or(Status::Unauthorized)?;
-	let user = gamma_client
-		.get_me(access_cookie.value())
+	delete_year(data.0, &conn, cookies, gamma_client)
 		.await
-		.map_err(|_| Status::Unauthorized)?;
-	if !user
-		.groups
-		.ok_or(Status::Forbidden)?
-		.iter()
-		.any(|g| g.name == GammaClient::owner_group())
-	{
-		return Err(Status::Forbidden);
-	}
-	let rows_deleted = conn
-		.run(move |c| {
-			diesel::delete(years::table)
-				.filter(years::columns::year.eq(data.year))
-				.execute(c)
-		})
-		.await
-		.map_err(|_| Status::InternalServerError)?;
-	if rows_deleted == 1 {
-		Ok(Status::Ok)
-	} else {
-		Err(Status::NotFound)
-	}
+		.map(|_| Status::Ok)
 }
 
 #[get("/participate.json")]
@@ -220,35 +118,9 @@ async fn get_participate_json(
 	cookies: &CookieJar<'_>,
 	gamma_client: &GammaClient,
 ) -> Result<Json<Vec<ParticipateResponse>>, Status> {
-	use db::{participants, Participant};
-
-	let access_cookie = cookies
-		.get(GammaClient::cookie())
-		.ok_or(Status::Unauthorized)?;
-	let user = gamma_client
-		.get_me(access_cookie.value())
+	get_participations(&conn, cookies, gamma_client)
 		.await
-		.map_err(|_| Status::Unauthorized)?;
-	let mut participant: Vec<Participant> = conn
-		.run(move |c| {
-			participants::table
-				.filter(participants::columns::cid.eq(user.cid))
-				.load(c)
-		})
-		.await
-		.map_err(|err| match err {
-			diesel::result::Error::NotFound => Status::NotFound,
-			_ => Status::InternalServerError,
-		})?;
-	Ok(Json(
-		participant
-			.drain(..)
-			.map(|p| ParticipateResponse {
-				year: p.year,
-				github: p.github,
-			})
-			.collect(),
-	))
+		.map(Json)
 }
 
 #[post("/participate.json", data = "<data>")]
@@ -258,62 +130,21 @@ async fn post_participate_json(
 	cookies: &CookieJar<'_>,
 	gamma_client: &GammaClient,
 ) -> Result<Status, Status> {
-	use db::{participants, Participant};
-
-	let access_cookie = cookies
-		.get(GammaClient::cookie())
-		.ok_or(Status::Unauthorized)?;
-	let user = gamma_client
-		.get_me(access_cookie.value())
+	set_participation(data.0, &conn, cookies, gamma_client)
 		.await
-		.map_err(|_| Status::Unauthorized)?;
-	conn.run(move |c| {
-		diesel::insert_into(participants::table)
-			.values(Participant {
-				cid: user.cid,
-				year: data.year,
-				github: data.github.clone(),
-			})
-			.on_conflict((participants::columns::cid, participants::columns::year))
-			.do_update()
-			.set(participants::columns::github.eq(data.github.clone()))
-			.execute(c)
-	})
-	.await
-	.map_err(|_| Status::InternalServerError)?;
-	Ok(Status::Ok)
+		.map(|_| Status::Ok)
 }
 
 #[delete("/participate.json", data = "<data>")]
 async fn delete_participate_json(
-	data: Json<ParticipateRequest>,
+	data: Json<ParticipateDeleteRequest>,
 	conn: DbConn,
 	cookies: &CookieJar<'_>,
 	gamma_client: &GammaClient,
 ) -> Result<Status, Status> {
-	use db::participants;
-
-	let access_cookie = cookies
-		.get(GammaClient::cookie())
-		.ok_or(Status::Unauthorized)?;
-	let user = gamma_client
-		.get_me(access_cookie.value())
+	delete_participation(data.0, &conn, cookies, gamma_client)
 		.await
-		.map_err(|_| Status::Unauthorized)?;
-	let rows_deleted = conn
-		.run(move |c| {
-			diesel::delete(participants::table)
-				.filter(participants::columns::cid.eq(user.cid))
-				.filter(participants::columns::year.eq(data.year))
-				.execute(c)
-		})
-		.await
-		.map_err(|_| Status::InternalServerError)?;
-	if rows_deleted == 1 {
-		Ok(Status::Ok)
-	} else {
-		Err(Status::NotFound)
-	}
+		.map(|_| Status::Ok)
 }
 
 #[get("/leaderboard/<year>")]
@@ -323,8 +154,6 @@ async fn get_leaderboard_year_json(
 	aoc_client: &AocClient,
 	gamma_client: &GammaClient,
 ) -> Result<Json<Vec<LeaderboardResponse>>, Status> {
-	use db::{participants, users, years, Participant, User, Year};
-
 	if !year.ends_with(".json") {
 		return Err(Status::NotFound);
 	}
@@ -335,52 +164,9 @@ async fn get_leaderboard_year_json(
 		Status::NotFound
 	})?;
 
-	let year_db: Year = conn
-		.run(move |c| years::table.filter(years::columns::year.eq(year)).first(c))
+	get_leaderboard(year, &conn, aoc_client, gamma_client)
 		.await
-		.map_err(|err| {
-			println!("Could not find in db: {:?}", err);
-			Status::NotFound
-		})?;
-
-	let leaderboard = aoc_client
-		.get_leaderboard(year, &year_db.leaderboard)
-		.await
-		.map_err(|err| {
-			println!("Could not find on AoC: {:?}", err);
-			Status::InternalServerError
-		})?;
-
-	let mut participants: Vec<(Participant, User)> = conn
-		.run(move |c| {
-			participants::table
-				.inner_join(users::table)
-				.filter(participants::columns::year.eq(year))
-				.load(c)
-		})
-		.await
-		.map_err(|_| Status::InternalServerError)?;
-
-	let mut response = futures::future::join_all(
-		participants
-			.drain(..)
-			.map(|(p, u)| LeaderboardResponse {
-				cid: u.cid.clone(),
-				nick: String::new(),
-				avatar_url: String::new(),
-				github: p.github,
-				score: leaderboard.members[&u.aoc_id].local_score,
-			})
-			.map(async move |mut lr| {
-				let user = gamma_client.get_user(&lr.cid).await.unwrap();
-				lr.nick.push_str(&user.nick);
-				lr.avatar_url.push_str(&user.avatar_url);
-				lr
-			}),
-	)
-	.await;
-	response.sort_by_key(|lr| Reverse(lr.score));
-	Ok(Json(response))
+		.map(Json)
 }
 
 #[get("/leaderboard/<year>/splits.json")]
@@ -390,78 +176,9 @@ async fn get_leaderboard_year_splits_json(
 	aoc_client: &AocClient,
 	gamma_client: &GammaClient,
 ) -> Result<Json<Vec<LeaderboardSplitsResponse>>, Status> {
-	use db::{participants, users, years, Participant, User, Year};
-
-	let year_db: Year = conn
-		.run(move |c| years::table.filter(years::columns::year.eq(year)).first(c))
+	get_leaderboard_splits(year, &conn, aoc_client, gamma_client)
 		.await
-		.map_err(|err| {
-			println!("Could not find in db: {:?}", err);
-			Status::NotFound
-		})?;
-
-	let leaderboard = aoc_client
-		.get_leaderboard(year, &year_db.leaderboard)
-		.await
-		.map_err(|err| {
-			println!("Could not find on AoC: {:?}", err);
-			Status::InternalServerError
-		})?;
-
-	let mut participants: Vec<(Participant, User)> = conn
-		.run(move |c| {
-			participants::table
-				.inner_join(users::table)
-				.filter(participants::columns::year.eq(year))
-				.load(c)
-		})
-		.await
-		.map_err(|_| Status::InternalServerError)?;
-
-	let mut response = futures::future::join_all(
-		participants
-			.drain(..)
-			.map(|(p, u)| {
-				const ONE_DAY: u64 = 24 * 60 * 60 * 1000;
-				let current = match SystemTime::now().duration_since(SystemTime::UNIX_EPOCH) {
-					Ok(dur) => dur.as_millis() as u64,
-					Err(_) => panic!("SystemTime before UNIX EPOCH!"),
-				};
-				let mut split_count = 0;
-				LeaderboardSplitsResponse {
-					cid: u.cid.clone(),
-					nick: String::new(),
-					avatar_url: String::new(),
-					github: p.github,
-					split_average: leaderboard.members[&u.aoc_id]
-						.completion_day_level
-						.values()
-						.filter_map(|d| match (d.first_star_ts, d.second_star_ts) {
-							(Some(first), Some(second)) => {
-								split_count += 1;
-								Some((second - first).min(ONE_DAY))
-							}
-							(Some(first), None) => {
-								split_count += 1;
-								Some((current - first).min(ONE_DAY))
-							}
-							_ => None,
-						})
-						.sum::<u64>()
-						.checked_div(split_count)
-						.unwrap_or(0),
-				}
-			})
-			.map(async move |mut lr| {
-				let user = gamma_client.get_user(&lr.cid).await.unwrap();
-				lr.nick.push_str(&user.nick);
-				lr.avatar_url.push_str(&user.avatar_url);
-				lr
-			}),
-	)
-	.await;
-	response.sort_by_key(|lr| lr.split_average);
-	Ok(Json(response))
+		.map(Json)
 }
 
 #[get("/leaderboard/<year>/languages.json")]
@@ -471,37 +188,9 @@ async fn get_leaderboard_year_languages_json(
 	gamma_client: &GammaClient,
 	github_client: &GitHubClient,
 ) -> Result<Json<Vec<LeaderboardLanguagesResponse>>, Status> {
-	use db::{participants, users, Participant, User};
-
-	let mut participants: Vec<(Participant, User)> = conn
-		.run(move |c| {
-			participants::table
-				.inner_join(users::table)
-				.filter(participants::columns::year.eq(year))
-				.filter(participants::columns::github.is_not_null())
-				.load(c)
-		})
+	get_leaderboard_languages(year, &conn, gamma_client, github_client)
 		.await
-		.map_err(|_| Status::InternalServerError)?;
-
-	let mut response =
-		futures::future::join_all(participants.drain(..).map(async move |(p, u)| {
-			let user = gamma_client.get_user(&u.cid).await.unwrap();
-			let languages = github_client
-				.get_languages(p.github.as_ref().unwrap())
-				.await
-				.unwrap();
-			LeaderboardLanguagesResponse {
-				cid: u.cid.clone(),
-				nick: user.nick,
-				avatar_url: user.avatar_url,
-				github: p.github,
-				languages: languages.into_keys().collect(),
-			}
-		}))
-		.await;
-	response.sort_by_key(|lr| Reverse(lr.languages.len()));
-	Ok(Json(response))
+		.map(Json)
 }
 
 #[get("/callback?<code>&<state>")]
