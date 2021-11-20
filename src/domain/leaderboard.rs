@@ -208,3 +208,50 @@ pub struct LeaderboardLanguagesResponse {
 	pub github: Option<String>,
 	pub languages: Vec<String>,
 }
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LeaderboardContext {
+	pub nick: String,
+	pub avatar_url: String,
+	pub github: Option<String>,
+	pub value: String,
+}
+
+impl From<LeaderboardResponse> for LeaderboardContext {
+	fn from(lr: LeaderboardResponse) -> Self {
+		LeaderboardContext {
+			nick: lr.nick,
+			avatar_url: lr.avatar_url,
+			github: lr.github,
+			value: lr.score.to_string(),
+		}
+	}
+}
+
+impl From<LeaderboardSplitsResponse> for LeaderboardContext {
+	fn from(lr: LeaderboardSplitsResponse) -> Self {
+		LeaderboardContext {
+			nick: lr.nick,
+			avatar_url: lr.avatar_url,
+			github: lr.github,
+			value: format!(
+				"{:0>2}:{:0>2}:{:0>6.3}",
+				lr.split_average / (60 * 60 * 1000) % 24,
+				(lr.split_average / (60 * 1000)) % 60,
+				(lr.split_average as f64 / 1000.0) % 60.0
+			),
+		}
+	}
+}
+
+impl From<LeaderboardLanguagesResponse> for LeaderboardContext {
+	fn from(lr: LeaderboardLanguagesResponse) -> Self {
+		LeaderboardContext {
+			nick: lr.nick,
+			avatar_url: lr.avatar_url,
+			github: lr.github,
+			value: lr.languages.len().to_string(),
+		}
+	}
+}

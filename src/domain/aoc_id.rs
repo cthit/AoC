@@ -1,5 +1,6 @@
 use diesel::{expression_methods::ExpressionMethods, query_dsl::QueryDsl, RunQueryDsl};
 use rocket::{
+	form::FromForm,
 	http::{CookieJar, Status},
 	serde::{Deserialize, Serialize},
 };
@@ -66,9 +67,10 @@ pub async fn set_aoc_id(
 	Ok(())
 }
 
-#[derive(Deserialize, Serialize)]
+#[derive(Deserialize, FromForm, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AocIdRequest {
+	#[field(name = "aocId")]
 	pub aoc_id: String,
 }
 

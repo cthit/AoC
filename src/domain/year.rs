@@ -1,5 +1,6 @@
 use diesel::{expression_methods::ExpressionMethods, RunQueryDsl};
 use rocket::{
+	form::FromForm,
 	http::{CookieJar, Status},
 	serde::{Deserialize, Serialize},
 };
@@ -96,7 +97,7 @@ pub async fn delete_year(
 	}
 }
 
-#[derive(Deserialize, Serialize)]
+#[derive(Deserialize, FromForm, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct YearRequest {
 	pub year: i32,
@@ -105,7 +106,7 @@ pub struct YearRequest {
 
 pub type YearResponse = YearRequest;
 
-#[derive(Deserialize)]
+#[derive(Deserialize, FromForm)]
 #[serde(rename_all = "camelCase")]
 pub struct YearDeleteRequest {
 	pub year: i32,

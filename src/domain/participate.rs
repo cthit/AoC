@@ -1,5 +1,6 @@
 use diesel::{expression_methods::ExpressionMethods, query_dsl::QueryDsl, RunQueryDsl};
 use rocket::{
+	form::FromForm,
 	http::{CookieJar, Status},
 	serde::{Deserialize, Serialize},
 };
@@ -100,7 +101,7 @@ pub async fn delete_participation(
 	}
 }
 
-#[derive(Deserialize, Serialize)]
+#[derive(Deserialize, FromForm, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ParticipateRequest {
 	pub year: i32,
@@ -110,7 +111,7 @@ pub struct ParticipateRequest {
 
 pub type ParticipateResponse = ParticipateRequest;
 
-#[derive(Deserialize)]
+#[derive(Deserialize, FromForm)]
 #[serde(rename_all = "camelCase")]
 pub struct ParticipateDeleteRequest {
 	pub year: i32,

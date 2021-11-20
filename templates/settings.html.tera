@@ -1,0 +1,44 @@
+{% extends "base" -%}
+{% block content -%}
+<form action="/aoc-id" method="post">
+	<p>What is your AoC id?</p>
+	<p>It's the number combination listed as "anonymous user #<em>nnnnnn</em>" under <a href="https://adventofcode.com/settings" target="_blank">Settings on AoC</a>.</p>
+	<input type="text" name="aocId" placeholder="AoC ID" required pattern="\d+" title="Enter the number combination ID" value="{{ data.aocId | default(value="") }}">
+	<button type="submit">Save</button>
+</form>
+{% if data.year is defined -%}
+	<hr/>
+	<form action="/participate" method="post">
+		<p>Participate in this years competition</p>
+		<p>You may enter {{ data.year }} years competition by pressing enter below. You may also provide a link to your GitHub repository to participate in the language leaderboard.</p>
+		<input type="text" name="github" placeholder="username/repo" pattern="(\w|\d|-|_|\.)+/(\w|\d|-|_|\.)+" title="Enter username slash repo" value="{{ data.github | default(value="") }}">
+		<input type="hidden" name="year" value="{{ data.year }}">
+		{% if data.isParticipating -%}
+			<button type="submit">Update</button>
+			<button type="submit" formaction="/participate-delete" formnovalidate>Leave</button>
+		{% else -%}
+			<button type="submit">Enter</button>
+		{% endif -%}
+	</form>
+{% endif -%}
+{% if data.owner is defined -%}
+	<hr/>
+	<p>You appear to be the owner of Ao<em>d</em></p>
+	<form action="/years" method="post">
+		<p>Do you wish to add a new year?</p>
+		<input type="text" name="year" placeholder="Year" required pattern="\d{4}" title="Enter 4-digit year">
+		<input type="text" name="leaderboard" placeholder="Leaderboard ID" required pattern="\d+" title="Enter the number combination ID">
+		<button type="submit">Add</button>
+	</form>
+	{% for year in data.owner.years %}
+		{% if loop.first -%}
+		<p>Or do you want to remove a existing year?</p>
+		{% endif -%}
+		<form action="/years-delete" method="post">
+			<span>Year: {{ year.year }} | Leaderboard: {{ year.leaderboard }}</span>
+			<input type="hidden" name="year" value="{{ year.year }}">
+			<button type="submit">Remove</button>
+		</form>
+	{% endfor %}
+{% endif -%}
+{% endblock content -%}

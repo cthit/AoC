@@ -122,6 +122,10 @@ main, form {
 	margin-bottom: 2rem;
 }
 
+form + form {
+	margin-top: -1rem;
+}
+
 main article h2 {
 	color: var(--text-em);
 	margin: 1rem 0px;

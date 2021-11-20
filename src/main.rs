@@ -11,8 +11,6 @@ extern crate diesel;
 #[macro_use]
 extern crate rocket;
 
-use std::collections::HashMap;
-
 use aoc_client::AocClient;
 use db::DbConn;
 use domain::{
@@ -29,12 +27,15 @@ use domain::{
 	set_year,
 	AocIdRequest,
 	AocIdResponse,
+	Context,
 	LeaderboardLanguagesResponse,
 	LeaderboardResponse,
 	LeaderboardSplitsResponse,
+	OwnerContext,
 	ParticipateDeleteRequest,
 	ParticipateRequest,
 	ParticipateResponse,
+	SettingsContext,
 	YearDeleteRequest,
 	YearRequest,
 	YearResponse,
@@ -43,6 +44,7 @@ use gamma::GammaClient;
 use github_client::GitHubClient;
 use rocket::{
 	fairing::AdHoc,
+	form::Form,
 	fs::FileServer,
 	http::{uri::Origin, Cookie, CookieJar, Status},
 	response::Redirect,
@@ -52,17 +54,24 @@ use rocket::{
 };
 use rocket_dyn_templates::Template;
 
-async fn create_base_context(
+async fn create_base_context<T: Serialize>(
+	data: T,
 	cookies: &CookieJar<'_>,
 	gamma_client: &GammaClient,
-) -> HashMap<String, Box<impl Serialize>> {
-	let mut context = HashMap::new();
+) -> Context<T> {
 	if let Some(access_cookie) = cookies.get(GammaClient::cookie()) {
 		if let Ok(user) = gamma_client.get_me(access_cookie.value()).await {
-			context.insert("currentNick".to_string(), Box::new(user.nick));
+			return Context {
+				current_nick: Some(user.nick),
+				data,
+			};
 		}
 	}
-	context
+
+	Context {
+		current_nick: None,
+		data,
+	}
 }
 
 #[get("/login?<back>")]
@@ -100,6 +109,17 @@ async fn post_aoc_id_json(
 		.map(|_| Status::Ok)
 }
 
+#[post("/aoc-id", data = "<data>")]
+async fn post_aoc_id(
+	data: Form<AocIdRequest>,
+	conn: DbConn,
+	cookies: &CookieJar<'_>,
+	gamma_client: &GammaClient,
+) -> Result<Redirect, Status> {
+	set_aoc_id(data.aoc_id.clone(), &conn, cookies, gamma_client).await?;
+	Ok(Redirect::to(uri!(settings)))
+}
+
 #[get("/years.json")]
 async fn get_years_json(conn: DbConn) -> Result<Json<Vec<YearResponse>>, Status> {
 	get_years(&conn).await.map(Json)
@@ -117,6 +137,17 @@ async fn post_years_json(
 		.map(|_| Status::Ok)
 }
 
+#[post("/years", data = "<data>")]
+async fn post_years(
+	data: Form<YearRequest>,
+	conn: DbConn,
+	cookies: &CookieJar<'_>,
+	gamma_client: &GammaClient,
+) -> Result<Redirect, Status> {
+	set_year(data.into_inner(), &conn, cookies, gamma_client).await?;
+	Ok(Redirect::to(uri!(settings)))
+}
+
 #[delete("/years.json", data = "<data>")]
 async fn delete_years_json(
 	data: Json<YearDeleteRequest>,
@@ -127,6 +158,17 @@ async fn delete_years_json(
 	delete_year(data.0, &conn, cookies, gamma_client)
 		.await
 		.map(|_| Status::Ok)
+}
+
+#[post("/years-delete", data = "<data>")]
+async fn delete_years(
+	data: Form<YearDeleteRequest>,
+	conn: DbConn,
+	cookies: &CookieJar<'_>,
+	gamma_client: &GammaClient,
+) -> Result<Redirect, Status> {
+	delete_year(data.into_inner(), &conn, cookies, gamma_client).await?;
+	Ok(Redirect::to(uri!(settings)))
 }
 
 #[get("/participate.json")]
@@ -152,6 +194,17 @@ async fn post_participate_json(
 		.map(|_| Status::Ok)
 }
 
+#[post("/participate", data = "<data>")]
+async fn post_participate(
+	data: Form<ParticipateRequest>,
+	conn: DbConn,
+	cookies: &CookieJar<'_>,
+	gamma_client: &GammaClient,
+) -> Result<Redirect, Status> {
+	set_participation(data.into_inner(), &conn, cookies, gamma_client).await?;
+	Ok(Redirect::to(uri!(settings)))
+}
+
 #[delete("/participate.json", data = "<data>")]
 async fn delete_participate_json(
 	data: Json<ParticipateDeleteRequest>,
@@ -162,6 +215,17 @@ async fn delete_participate_json(
 	delete_participation(data.0, &conn, cookies, gamma_client)
 		.await
 		.map(|_| Status::Ok)
+}
+
+#[post("/participate-delete", data = "<data>")]
+async fn delete_participate(
+	data: Form<ParticipateDeleteRequest>,
+	conn: DbConn,
+	cookies: &CookieJar<'_>,
+	gamma_client: &GammaClient,
+) -> Result<Redirect, Status> {
+	delete_participation(data.into_inner(), &conn, cookies, gamma_client).await?;
+	Ok(Redirect::to(uri!(settings)))
 }
 
 #[get("/leaderboard/<year>")]
@@ -247,15 +311,75 @@ async fn callback_error(error: String, error_description: Option<String>) -> Str
 }
 
 #[get("/")]
-async fn index(cookies: &CookieJar<'_>, gamma_client: &GammaClient,) -> Template {
-	let context = create_base_context(cookies, gamma_client).await;
+async fn index(cookies: &CookieJar<'_>, gamma_client: &GammaClient) -> Template {
+	let context = create_base_context((), cookies, gamma_client).await;
 	Template::render("index", context)
 }
 
 #[get("/about")]
-async fn about(cookies: &CookieJar<'_>, gamma_client: &GammaClient,) -> Template {
-	let context = create_base_context(cookies, gamma_client).await;
+async fn about(cookies: &CookieJar<'_>, gamma_client: &GammaClient) -> Template {
+	let context = create_base_context((), cookies, gamma_client).await;
 	Template::render("about", context)
+}
+
+#[get("/settings")]
+async fn settings(
+	conn: DbConn,
+	cookies: &CookieJar<'_>,
+	gamma_client: &GammaClient,
+) -> Result<Template, Status> {
+	let aoc_id = get_aoc_id(&conn, cookies, gamma_client)
+		.await
+		.map(|aoc_id| Some(aoc_id.aoc_id))
+		.or_else(|e| {
+			if e.code == Status::NotFound.code {
+				Ok(None)
+			} else {
+				Err(e)
+			}
+		})?;
+	let year = get_years(&conn).await?.into_iter().map(|y| y.year).max();
+	let (github, is_participating) = match year {
+		Some(year) => get_participations(&conn, cookies, gamma_client)
+			.await?
+			.drain(..)
+			.find(|p| p.year == year)
+			.map_or_else(|| (None, false), |p| (p.github, true)),
+		None => (None, false),
+	};
+	let owner = if let Some(access_cookie) = cookies.get(GammaClient::cookie()) {
+		if let Ok(user) = gamma_client.get_me(access_cookie.value()).await {
+			if user
+				.groups
+				.ok_or(Status::Forbidden)?
+				.iter()
+				.any(|g| g.name == GammaClient::owner_group())
+			{
+				Some(OwnerContext {
+					years: get_years(&conn).await?,
+				})
+			} else {
+				None
+			}
+		} else {
+			None
+		}
+	} else {
+		None
+	};
+	let context = create_base_context(
+		SettingsContext {
+			aoc_id,
+			github,
+			year,
+			is_participating,
+			owner,
+		},
+		cookies,
+		gamma_client,
+	)
+	.await;
+	Ok(Template::render("settings", context))
 }
 
 #[launch]
@@ -279,16 +403,22 @@ fn rocket() -> Rocket<Build> {
 			index,
 			login,
 			about,
+			settings,
 			callback,
 			callback_error,
 			get_aoc_id_json,
 			post_aoc_id_json,
+			post_aoc_id,
 			get_years_json,
 			post_years_json,
+			post_years,
 			delete_years_json,
+			delete_years,
 			get_participate_json,
 			post_participate_json,
+			post_participate,
 			delete_participate_json,
+			delete_participate,
 			get_leaderboard_year_json,
 			get_leaderboard_year_splits_json,
 			get_leaderboard_year_languages_json,
