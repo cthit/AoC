@@ -21,6 +21,9 @@ FROM debian:buster-slim AS run
 # OpenSSL is needed
 RUN apt-get update && apt-get install openssl libpq-dev -y
 COPY --from=build /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
+# Get statics and templates
+COPY static/ ./static
+COPY templates/ ./templates
 # Get the binary
 COPY --from=build /usr/local/cargo/bin/digit-aoc ./digit-aoc
 # Run the binary

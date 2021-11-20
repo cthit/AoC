@@ -1,0 +1,168 @@
+:root {
+	--accent: #09cdda;
+	--accent-glow: #149da7;
+	--accent-focus: #3ef2ff;
+
+	--gold: #ffff66;
+
+	--text: #cccccc;
+	--text-em: #ffffff;
+
+	--background: #0f0f23;
+	--background-dark: #10101a;
+
+	--border: #666666;
+}
+
+html, body {
+	background-color: var(--background);
+	color: var(--text);
+	font-family: "Source Code Pro", monospace;
+	font-size: 14pt;
+}
+
+* {
+	box-sizing: border-box;
+	outline: none !important;
+}
+
+h1, h2 {
+	font-size: 1rem;
+	font-weight: normal;
+}
+
+a, button {
+	color: var(--accent);
+	cursor: pointer;
+	border: none;
+	background: none;
+	font-family: inherit;
+	font-size: inherit;
+	text-decoration: none;
+}
+a:hover, a:focus, button:hover, button:focus {
+	color: var(--accent-focus);
+}
+button::before {
+	content: "[";
+}
+button::after {
+	content: "]";
+}
+
+input[type="text"] {
+	color: inherit;
+	border: 1px solid var(--border);
+	background: var(--background-dark);
+	padding: 0 2px;
+	font-family: inherit;
+	font-size: inherit;
+	margin: 0;
+}
+
+input:invalid ~ button {
+	color: var(--text);
+	cursor: not-allowed;
+}
+
+em {
+	color: var(--text-em);
+	font-style: normal;
+	text-shadow: 0px 0px 5px currentColor;
+}
+
+hr {
+	border: none;
+	margin: 0px;
+}
+hr::after {
+	content: "------------------------------------------------------------------------------";
+}
+
+pre {
+	font-size: 0.75rem;
+	line-height: 1.15;
+	cursor: default;
+}
+
+header {
+	white-space: nowrap;
+	margin-bottom: 2rem;
+	position: relative;
+}
+
+header h1 {
+	margin: 0px;
+	display: inline-block;
+}
+
+header h1 a {
+	color: var(--accent-glow);
+	text-shadow: 0px 0px 2px currentColor, 0px 0px 5px currentColor;
+}
+header h1 a:hover, header h1 a:focus {
+	color: var(--accent-focus);
+}
+
+header nav {
+	display: inline-block;
+	position: absolute;
+	left: calc(15ch + 1rem);
+}
+
+header nav a::before {
+	content: "[";
+}
+header nav a::after {
+	content: "]";
+}
+
+main, form {
+	width: 80ch;
+	margin-bottom: 2rem;
+}
+
+main article h2 {
+	color: var(--text-em);
+	margin: 1rem 0px;
+}
+main article h2::before {
+	content: "--- "
+}
+main article h2::after {
+	content: " ---";
+}
+
+main article *[title] {
+	border-bottom: 1px dotted var(--gold);
+}
+
+@counter-style para-list {
+	system: numeric;
+	symbols: "0" "1" "2" "3" "4" "5" "6" "7" "8" "9";
+	suffix: ")";
+}
+
+ol {
+	list-style: para-list;
+}
+ol li span {
+	margin-left: 1ch;
+	margin-right: 1ch;
+	display: inline-block;
+	text-align: end;
+}
+ol.thin li span {
+	width: 3ch;
+}
+ol.medium li span {
+	width: 6ch;
+}
+ol.thick li span {
+	width: 12ch;
+}
+ol li img {
+	vertical-align: middle;
+	position: relative;
+	top: -2px;
+}

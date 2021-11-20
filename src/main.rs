@@ -11,6 +11,8 @@ extern crate diesel;
 #[macro_use]
 extern crate rocket;
 
+use std::collections::HashMap;
+
 use aoc_client::AocClient;
 use db::DbConn;
 use domain::{
@@ -41,12 +43,27 @@ use gamma::GammaClient;
 use github_client::GitHubClient;
 use rocket::{
 	fairing::AdHoc,
+	fs::FileServer,
 	http::{uri::Origin, Cookie, CookieJar, Status},
 	response::Redirect,
-	serde::json::Json,
+	serde::{json::Json, Serialize},
 	Build,
 	Rocket,
 };
+use rocket_dyn_templates::Template;
+
+async fn create_base_context(
+	cookies: &CookieJar<'_>,
+	gamma_client: &GammaClient,
+) -> HashMap<String, Box<impl Serialize>> {
+	let mut context = HashMap::new();
+	if let Some(access_cookie) = cookies.get(GammaClient::cookie()) {
+		if let Ok(user) = gamma_client.get_me(access_cookie.value()).await {
+			context.insert("currentNick".to_string(), Box::new(user.nick));
+		}
+	}
+	context
+}
 
 #[get("/login?<back>")]
 async fn login(
@@ -230,13 +247,21 @@ async fn callback_error(error: String, error_description: Option<String>) -> Str
 }
 
 #[get("/")]
-fn index() -> &'static str {
-	"Hello, world!"
+async fn index(cookies: &CookieJar<'_>, gamma_client: &GammaClient,) -> Template {
+	let context = create_base_context(cookies, gamma_client).await;
+	Template::render("index", context)
+}
+
+#[get("/about")]
+async fn about(cookies: &CookieJar<'_>, gamma_client: &GammaClient,) -> Template {
+	let context = create_base_context(cookies, gamma_client).await;
+	Template::render("about", context)
 }
 
 #[launch]
 fn rocket() -> Rocket<Build> {
 	rocket::build()
+		.attach(Template::fairing())
 		.attach(DbConn::fairing())
 		.attach(AdHoc::on_liftoff("Initialize the AoC database", |rocket| {
 			Box::pin(async move {
@@ -249,9 +274,11 @@ fn rocket() -> Rocket<Build> {
 				}
 			})
 		}))
+		.mount("/static", FileServer::from("static/"))
 		.mount("/", routes![
 			index,
 			login,
+			about,
 			callback,
 			callback_error,
 			get_aoc_id_json,

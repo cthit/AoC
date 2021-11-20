@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html>
+	<head>
+		<meta charset="UTF-8">
+		<meta http-equiv="X-UA-Compatible" content="IE=edge">
+		<meta name="viewport" content="width=device-width, initial-scale=1.0">
+		<title>Advent of digIT</title>
+		<link rel="stylesheet" href="/static/styles.css">
+		<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Source+Code+Pro:300&subset=latin,latin-ext">
+	</head>
+	<body>
+		<header>
+			<div>
+				<h1>
+					<a href="/">Advent of digIT</a>
+				</h1>
+				<nav>
+					<a href="/about">About</a>
+					<a href="/leaderboard">Leaderboard</a>
+					{% if currentNick is defined -%}
+						<a href="/settings">Settings</a>
+						<span>{{ currentNick }}</span>
+					{% else -%}
+						<a href="/login">Login</a>
+					{% endif -%}
+				</nav>
+			</div>
+			{% block nav -%}{% endblock nav -%}
+		</header>
+		<main>
+			{% block content -%}{% endblock content -%}
+		</main>
+	</body>
+</html>
