@@ -314,7 +314,7 @@ async fn get_leaderboard_year_splits(
 			              completing puzzle one and two of each day. If you like sleep, this \
 			              might be the leaderboard for you."
 				.into(),
-			value_width: 12,
+			value_width: 8,
 			leaderboard: leaderboard.drain(..).map(From::from).collect(),
 		},
 		cookies,

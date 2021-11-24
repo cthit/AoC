@@ -72,10 +72,10 @@ impl From<LeaderboardSplitsResponse> for LeaderboardPlacementContext {
 			avatar_url: lr.avatar_url,
 			github: lr.github,
 			value: format!(
-				"{:0>2}:{:0>2}:{:0>6.3}",
-				lr.split_average / (60 * 60 * 1000) % 24,
-				(lr.split_average / (60 * 1000)) % 60,
-				(lr.split_average as f64 / 1000.0) % 60.0
+				"{:0>2}:{:0>2}:{:0>2}",
+				(lr.split_average / (60 * 60)) % 24,
+				(lr.split_average / 60) % 60,
+				lr.split_average % 60
 			),
 		}
 	}

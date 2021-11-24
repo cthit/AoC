@@ -104,9 +104,9 @@ pub async fn get_leaderboard_splits(
 		participants
 			.drain(..)
 			.map(|(p, u)| {
-				const ONE_DAY: u64 = 24 * 60 * 60 * 1000;
+				const ONE_DAY: u64 = 24 * 60 * 60;
 				let current = match SystemTime::now().duration_since(SystemTime::UNIX_EPOCH) {
-					Ok(dur) => dur.as_millis() as u64,
+					Ok(dur) => dur.as_secs() as u64,
 					Err(_) => panic!("SystemTime before UNIX EPOCH!"),
 				};
 				let mut split_count = 0;
@@ -131,7 +131,7 @@ pub async fn get_leaderboard_splits(
 						})
 						.sum::<u64>()
 						.checked_div(split_count)
-						.unwrap_or(0),
+						.unwrap_or(ONE_DAY),
 				}
 			})
 			.map(async move |mut lr| {
