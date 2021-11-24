@@ -1,0 +1,28 @@
+{% extends "base" -%}
+{% block nav -%}
+<div>
+	<nav>
+		<a href="/leaderboard/{{data.year}}">Score</a>
+		<a href="/leaderboard/{{data.year}}/splits">Splits</a>
+		<a href="/leaderboard/{{data.year}}/languages">Languages</a>
+	</nav>
+</div>
+{% endblock nav -%}
+{% block content -%}
+<article>
+	<p>{{ data.description }}</p>
+	<ol style="--value-width: {{ data.valueWidth }}">
+		{% for placement in data.leaderboard -%}
+			<li>
+				<span>{{ placement.value }}</span>
+				<span><img src="{{ placement.avatarUrl }}" height="20px"/></span>
+				{% if placement.github is defined -%}
+					<a href="{{ placement.github }}" target="_blank">{{ placement.nick }}</a>
+				{% else -%}
+					<span>{{ placement.nick }}</span>
+				{% endif -%}
+			</li>
+		{% endfor -%}
+	</ol>
+</article>
+{% endblock content -%}

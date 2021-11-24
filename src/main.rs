@@ -28,8 +28,9 @@ use domain::{
 	AocIdRequest,
 	AocIdResponse,
 	Context,
+	JsonOrTemplateLeaderboard,
+	LeaderboardContext,
 	LeaderboardLanguagesResponse,
-	LeaderboardResponse,
 	LeaderboardSplitsResponse,
 	OwnerContext,
 	ParticipateDeleteRequest,
@@ -228,26 +229,60 @@ async fn delete_participate(
 	Ok(Redirect::to(uri!(settings)))
 }
 
+#[get("/leaderboard")]
+async fn redirect_leaderboard(conn: DbConn) -> Result<Redirect, Status> {
+	let years = get_years(&conn).await?;
+	years
+		.iter()
+		.map(|y| y.year)
+		.max()
+		.ok_or(Status::NotFound)
+		.map(|y| Redirect::found(uri!(get_leaderboard_year_json(y.to_string()))))
+}
+
 #[get("/leaderboard/<year>")]
 async fn get_leaderboard_year_json(
 	mut year: String,
 	conn: DbConn,
+	cookies: &CookieJar<'_>,
 	aoc_client: &AocClient,
 	gamma_client: &GammaClient,
-) -> Result<Json<Vec<LeaderboardResponse>>, Status> {
-	if !year.ends_with(".json") {
-		return Err(Status::NotFound);
-	}
+) -> Result<JsonOrTemplateLeaderboard, Status> {
+	let is_json = if year.ends_with(".json") {
+		year.truncate(year.len() - 5);
+		true
+	} else {
+		false
+	};
 
-	year.truncate(year.len() - 5);
 	let year: i32 = year.parse().map_err(|err| {
-		println!("Could not parse: {:?}", err);
+		println!("Could not parse year: {:?} ({}:{})", err, file!(), line!());
 		Status::NotFound
 	})?;
 
-	get_leaderboard(year, &conn, aoc_client, gamma_client)
-		.await
-		.map(Json)
+	let mut leaderboard = get_leaderboard(year, &conn, aoc_client, gamma_client).await?;
+
+	if is_json {
+		Ok(JsonOrTemplateLeaderboard::json(leaderboard))
+	} else {
+		let context = create_base_context(
+			LeaderboardContext {
+				year,
+				description: "This is (almost) the same leaderboard as presented on AoC, whoever \
+				              completes each puzzle first each day scores the highest."
+					.into(),
+				value_width: 6,
+				leaderboard: leaderboard.drain(..).map(From::from).collect(),
+			},
+			cookies,
+			gamma_client,
+		)
+		.await;
+		Ok(JsonOrTemplateLeaderboard::Template(Template::render(
+			"leaderboard",
+			context,
+		)))
+	}
 }
 
 #[get("/leaderboard/<year>/splits.json")]
@@ -262,6 +297,33 @@ async fn get_leaderboard_year_splits_json(
 		.map(Json)
 }
 
+#[get("/leaderboard/<year>/splits")]
+async fn get_leaderboard_year_splits(
+	year: i32,
+	conn: DbConn,
+	cookies: &CookieJar<'_>,
+	aoc_client: &AocClient,
+	gamma_client: &GammaClient,
+) -> Result<Template, Status> {
+	let mut leaderboard = get_leaderboard_splits(year, &conn, aoc_client, gamma_client).await?;
+
+	let context = create_base_context(
+		LeaderboardContext {
+			year,
+			description: "The leaderboard ranks players according to split time, the time between \
+			              completing puzzle one and two of each day. If you like sleep, this \
+			              might be the leaderboard for you."
+				.into(),
+			value_width: 12,
+			leaderboard: leaderboard.drain(..).map(From::from).collect(),
+		},
+		cookies,
+		gamma_client,
+	)
+	.await;
+	Ok(Template::render("leaderboard", context))
+}
+
 #[get("/leaderboard/<year>/languages.json")]
 async fn get_leaderboard_year_languages_json(
 	year: i32,
@@ -272,6 +334,34 @@ async fn get_leaderboard_year_languages_json(
 	get_leaderboard_languages(year, &conn, gamma_client, github_client)
 		.await
 		.map(Json)
+}
+
+#[get("/leaderboard/<year>/languages")]
+async fn get_leaderboard_year_languages(
+	year: i32,
+	conn: DbConn,
+	cookies: &CookieJar<'_>,
+	gamma_client: &GammaClient,
+	github_client: &GitHubClient,
+) -> Result<Template, Status> {
+	let mut leaderboard =
+		get_leaderboard_languages(year, &conn, gamma_client, github_client).await?;
+
+	let context = create_base_context(
+		LeaderboardContext {
+			year,
+			description: "If you want to learn a new language, or a few, AoC is the perfect time \
+			              to do so. If you list a GitHub repo in settings you will compete on \
+			              this leaderboard with the number of languages you've used."
+				.into(),
+			value_width: 3,
+			leaderboard: leaderboard.drain(..).map(From::from).collect(),
+		},
+		cookies,
+		gamma_client,
+	)
+	.await;
+	Ok(Template::render("leaderboard", context))
 }
 
 #[get("/callback?<code>&<state>")]
@@ -419,8 +509,11 @@ fn rocket() -> Rocket<Build> {
 			post_participate,
 			delete_participate_json,
 			delete_participate,
+			redirect_leaderboard,
 			get_leaderboard_year_json,
 			get_leaderboard_year_splits_json,
+			get_leaderboard_year_splits,
 			get_leaderboard_year_languages_json,
+			get_leaderboard_year_languages,
 		])
 }

@@ -1,7 +1,11 @@
 use std::{cmp::Reverse, time::SystemTime};
 
 use diesel::{expression_methods::ExpressionMethods, query_dsl::QueryDsl, RunQueryDsl};
-use rocket::{http::Status, serde::Serialize};
+use rocket::{
+	http::Status,
+	serde::{json::Json, Serialize},
+};
+use rocket_dyn_templates::Template;
 
 use crate::{
 	aoc_client::AocClient,
@@ -189,6 +193,18 @@ pub struct LeaderboardResponse {
 	pub score: u16,
 }
 
+#[derive(Responder)]
+pub enum JsonOrTemplateLeaderboard {
+	Json(Json<Vec<LeaderboardResponse>>),
+	Template(Template),
+}
+
+impl JsonOrTemplateLeaderboard {
+	pub fn json(leaderboard: Vec<LeaderboardResponse>) -> Self {
+		JsonOrTemplateLeaderboard::Json(Json(leaderboard))
+	}
+}
+
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct LeaderboardSplitsResponse {
@@ -207,51 +223,4 @@ pub struct LeaderboardLanguagesResponse {
 	pub avatar_url: String,
 	pub github: Option<String>,
 	pub languages: Vec<String>,
-}
-
-#[derive(Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct LeaderboardContext {
-	pub nick: String,
-	pub avatar_url: String,
-	pub github: Option<String>,
-	pub value: String,
-}
-
-impl From<LeaderboardResponse> for LeaderboardContext {
-	fn from(lr: LeaderboardResponse) -> Self {
-		LeaderboardContext {
-			nick: lr.nick,
-			avatar_url: lr.avatar_url,
-			github: lr.github,
-			value: lr.score.to_string(),
-		}
-	}
-}
-
-impl From<LeaderboardSplitsResponse> for LeaderboardContext {
-	fn from(lr: LeaderboardSplitsResponse) -> Self {
-		LeaderboardContext {
-			nick: lr.nick,
-			avatar_url: lr.avatar_url,
-			github: lr.github,
-			value: format!(
-				"{:0>2}:{:0>2}:{:0>6.3}",
-				lr.split_average / (60 * 60 * 1000) % 24,
-				(lr.split_average / (60 * 1000)) % 60,
-				(lr.split_average as f64 / 1000.0) % 60.0
-			),
-		}
-	}
-}
-
-impl From<LeaderboardLanguagesResponse> for LeaderboardContext {
-	fn from(lr: LeaderboardLanguagesResponse) -> Self {
-		LeaderboardContext {
-			nick: lr.nick,
-			avatar_url: lr.avatar_url,
-			github: lr.github,
-			value: lr.languages.len().to_string(),
-		}
-	}
 }
