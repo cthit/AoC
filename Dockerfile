@@ -15,7 +15,7 @@ RUN cargo build --release
 COPY src/ ./src/
 # Update timestamp so that cargo builds again
 RUN touch src/main.rs
-RUN cargo install --path .
+RUN cargo build --release
 
 FROM debian:buster-slim AS run
 # OpenSSL is needed
@@ -25,6 +25,6 @@ COPY --from=build /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
 COPY static/ ./static
 COPY templates/ ./templates
 # Get the binary
-COPY --from=build /usr/local/cargo/bin/digit-aoc ./digit-aoc
+COPY --from=build /usr/src/digit-aoc/target/release/digit-aoc ./digit-aoc
 # Run the binary
 CMD ["./digit-aoc"]
