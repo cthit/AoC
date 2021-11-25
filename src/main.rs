@@ -22,6 +22,7 @@ use domain::{
 	get_leaderboard_languages,
 	get_leaderboard_splits,
 	get_participations,
+	get_year,
 	get_years,
 	set_aoc_id,
 	set_participation,
@@ -268,6 +269,11 @@ async fn get_leaderboard_year_json(
 	if is_json {
 		Ok(JsonOrTemplateLeaderboard::json(leaderboard))
 	} else {
+		let join_code = get_year(year, &conn, cookies, gamma_client)
+			.await
+			.ok()
+			.map(|y| y.leaderboard);
+
 		let context = create_base_context(
 			LeaderboardContext {
 				year,
@@ -275,6 +281,7 @@ async fn get_leaderboard_year_json(
 				              completes each puzzle first each day scores the highest."
 					.into(),
 				value_width: 6,
+				join_code,
 				leaderboard: leaderboard.drain(..).map(From::from).collect(),
 			},
 			cookies,
@@ -313,6 +320,11 @@ async fn get_leaderboard_year_splits(
 	let mut leaderboard =
 		get_leaderboard_splits(year, &conn, &redis, aoc_client, gamma_client).await?;
 
+	let join_code = get_year(year, &conn, cookies, gamma_client)
+		.await
+		.ok()
+		.map(|y| y.leaderboard);
+
 	let context = create_base_context(
 		LeaderboardContext {
 			year,
@@ -321,6 +333,7 @@ async fn get_leaderboard_year_splits(
 			              might be the leaderboard for you."
 				.into(),
 			value_width: 8,
+			join_code,
 			leaderboard: leaderboard.drain(..).map(From::from).collect(),
 		},
 		cookies,
@@ -355,6 +368,11 @@ async fn get_leaderboard_year_languages(
 	let mut leaderboard =
 		get_leaderboard_languages(year, &conn, &redis, gamma_client, github_client).await?;
 
+	let join_code = get_year(year, &conn, cookies, gamma_client)
+		.await
+		.ok()
+		.map(|y| y.leaderboard);
+
 	let context = create_base_context(
 		LeaderboardContext {
 			year,
@@ -363,6 +381,7 @@ async fn get_leaderboard_year_languages(
 			              this leaderboard with the number of languages you've used."
 				.into(),
 			value_width: 3,
+			join_code,
 			leaderboard: leaderboard.drain(..).map(From::from).collect(),
 		},
 		cookies,

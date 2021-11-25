@@ -1,4 +1,4 @@
-use diesel::{expression_methods::ExpressionMethods, RunQueryDsl};
+use diesel::{expression_methods::ExpressionMethods, query_dsl::QueryDsl, RunQueryDsl};
 use rocket::{
 	form::FromForm,
 	http::{CookieJar, Status},
@@ -22,6 +22,30 @@ pub async fn get_years(conn: &DbConn) -> Result<Vec<YearResponse>, Status> {
 			leaderboard: y.leaderboard_id().to_owned(),
 		})
 		.collect())
+}
+
+pub async fn get_year(
+	year: i32,
+	conn: &DbConn,
+	cookies: &CookieJar<'_>,
+	gamma_client: &GammaClient,
+) -> Result<YearResponse, Status> {
+	let access_cookie = cookies
+		.get(GammaClient::cookie())
+		.ok_or(Status::Unauthorized)?;
+	let _user = gamma_client
+		.get_me(access_cookie.value())
+		.await
+		.map_err(|_| Status::Unauthorized)?;
+
+	let year: Year = conn
+		.run(move |c| years::table.filter(years::columns::year.eq(year)).first(c))
+		.await
+		.map_err(|_| Status::InternalServerError)?;
+	Ok(YearResponse {
+		year: year.year,
+		leaderboard: year.leaderboard,
+	})
 }
 
 pub async fn set_year(

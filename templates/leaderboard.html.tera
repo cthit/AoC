@@ -11,6 +11,9 @@
 {% block content -%}
 <article>
 	<p>{{ data.description }}</p>
+	{% if data.joinCode is defined -%}
+		<p>To join the leaderboard use join code <code>{{ data.joinCode }}</code> at the <a href="https://adventofcode.com/{{data.year}}/leaderboard/private" target="_blank">AoC private leaderboards page</a>.</p>
+	{% endif -%}
 	<ol style="--value-width: {{ data.valueWidth }}">
 		{% for placement in data.leaderboard -%}
 			<li>

@@ -7,17 +7,19 @@
 
 	--text: #cccccc;
 	--text-em: #ffffff;
+	--font: "Source Code Pro", monospace;
 
 	--background: #0f0f23;
 	--background-dark: #10101a;
 
 	--border: #666666;
+	--code-border: #333340;
 }
 
 html, body {
 	background-color: var(--background);
 	color: var(--text);
-	font-family: "Source Code Pro", monospace;
+	font-family: var(--font);
 	font-size: 14pt;
 }
 
@@ -48,6 +50,28 @@ button::before {
 }
 button::after {
 	content: "]";
+}
+
+code {
+	z-index: 0;
+	position: relative;
+	display: inline-block;
+	font-family: var(--font);
+	margin: 0px;
+	padding: 0px;
+	user-select: all;
+}
+code::before {
+	z-index: -1;
+	content: "";
+	position: absolute;
+	display: block;
+	left: -2px;
+	right: -2px;
+	top: -3px;
+	bottom: 0px;
+	border: 1px solid var(--code-border);
+	background-color: var(--background-dark);
 }
 
 input[type="text"] {

@@ -40,6 +40,8 @@ pub struct OwnerContext {
 pub struct LeaderboardContext {
 	pub year: i32,
 	pub description: String,
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub join_code: Option<String>,
 	pub value_width: u8,
 	pub leaderboard: Vec<LeaderboardPlacementContext>,
 }
