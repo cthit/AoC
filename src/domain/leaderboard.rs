@@ -88,16 +88,21 @@ pub async fn get_leaderboard(
 	let year_db: Year = conn
 		.run(move |c| years::table.filter(years::columns::year.eq(year)).first(c))
 		.await
-		.map_err(|err| {
-			println!("Could not find in db: {:?}", err);
-			Status::NotFound
-		})?;
+		.map_err(|_| Status::NotFound)?;
 
 	let leaderboard = aoc_client
 		.get_leaderboard(year, year_db.leaderboard_id())
 		.await
-		.map_err(|err| {
-			println!("Could not find on AoC: {:?}", err);
+		.map_err(|e| {
+			println!(
+				"Could not find AoC leaderboard (year {}, id \"{}\") when loading leaderboard \
+				 ({}:{})\n\t{:?}",
+				year,
+				year_db.leaderboard_id(),
+				file!(),
+				line!(),
+				e
+			);
 			Status::InternalServerError
 		})?;
 
@@ -109,9 +114,17 @@ pub async fn get_leaderboard(
 				.load(c)
 		})
 		.await
-		.map_err(|_| Status::InternalServerError)?;
+		.map_err(|e| {
+			println!(
+				"Could not fetch from database when loading leaderboard ({}:{})\n\t{:?}",
+				file!(),
+				line!(),
+				e
+			);
+			Status::InternalServerError
+		})?;
 
-	let mut response = futures::future::join_all(
+	let mut response: Vec<Result<_, ()>> = futures::future::join_all(
 		participants
 			.drain(..)
 			.map(|(p, u)| LeaderboardResponse {
@@ -122,13 +135,22 @@ pub async fn get_leaderboard(
 				score: leaderboard.members[&u.aoc_id].local_score,
 			})
 			.map(async move |mut lr| {
-				let user = gamma_client.get_user(&lr.cid).await.unwrap();
+				let user = gamma_client.get_user(&lr.cid).await.map_err(|e| {
+					println!(
+						"Could not get user {} when loading leaderboard ({}:{})\n\t{:?}",
+						lr.cid,
+						file!(),
+						line!(),
+						e
+					);
+				})?;
 				lr.nick.push_str(&user.nick);
 				lr.avatar_url.push_str(&user.avatar_url);
-				lr
+				Ok(lr)
 			}),
 	)
 	.await;
+	let mut response: Vec<_> = response.drain(..).filter_map(|r| r.ok()).collect();
 	response.sort_by_key(|lr| Reverse(lr.score));
 
 	cache_leaderboard(redis, redis_key, &response, *LEADERBOARD_CACHE_TIME).await;
@@ -152,16 +174,21 @@ pub async fn get_leaderboard_splits(
 	let year_db: Year = conn
 		.run(move |c| years::table.filter(years::columns::year.eq(year)).first(c))
 		.await
-		.map_err(|err| {
-			println!("Could not find in db: {:?}", err);
-			Status::NotFound
-		})?;
+		.map_err(|_| Status::NotFound)?;
 
 	let leaderboard = aoc_client
 		.get_leaderboard(year, year_db.leaderboard_id())
 		.await
-		.map_err(|err| {
-			println!("Could not find on AoC: {:?}", err);
+		.map_err(|e| {
+			println!(
+				"Could not find AoC leaderboard (year {}, id \"{}\") when loading leaderboard \
+				 ({}:{})\n\t{:?}",
+				year,
+				year_db.leaderboard_id(),
+				file!(),
+				line!(),
+				e
+			);
 			Status::InternalServerError
 		})?;
 
@@ -173,9 +200,17 @@ pub async fn get_leaderboard_splits(
 				.load(c)
 		})
 		.await
-		.map_err(|_| Status::InternalServerError)?;
+		.map_err(|e| {
+			println!(
+				"Could not fetch from database when loading leaderboard ({}:{})\n\t{:?}",
+				file!(),
+				line!(),
+				e
+			);
+			Status::InternalServerError
+		})?;
 
-	let mut response = futures::future::join_all(
+	let mut response: Vec<Result<_, ()>> = futures::future::join_all(
 		participants
 			.drain(..)
 			.map(|(p, u)| {
@@ -210,13 +245,22 @@ pub async fn get_leaderboard_splits(
 				}
 			})
 			.map(async move |mut lr| {
-				let user = gamma_client.get_user(&lr.cid).await.unwrap();
+				let user = gamma_client.get_user(&lr.cid).await.map_err(|e| {
+					println!(
+						"Could not get user {} when loading leaderboard ({}:{})\n\t{:?}",
+						lr.cid,
+						file!(),
+						line!(),
+						e
+					);
+				})?;
 				lr.nick.push_str(&user.nick);
 				lr.avatar_url.push_str(&user.avatar_url);
-				lr
+				Ok(lr)
 			}),
 	)
 	.await;
+	let mut response: Vec<_> = response.drain(..).filter_map(|r| r.ok()).collect();
 	response.sort_by_key(|lr| lr.split_average);
 
 	cache_leaderboard(redis, redis_key, &response, *LEADERBOARD_SPLITS_CACHE_TIME).await;
@@ -243,27 +287,51 @@ pub async fn get_leaderboard_languages(
 				.inner_join(users::table)
 				.filter(participants::columns::year.eq(year))
 				.filter(participants::columns::github.is_not_null())
+				.filter(participants::columns::github.ne(""))
 				.load(c)
 		})
 		.await
-		.map_err(|_| Status::InternalServerError)?;
+		.map_err(|e| {
+			println!(
+				"Could not fetch from database when loading leaderboard ({}:{})\n\t{:?}",
+				file!(),
+				line!(),
+				e
+			);
+			Status::InternalServerError
+		})?;
 
-	let mut response =
+	let mut response: Vec<Result<_, ()>> =
 		futures::future::join_all(participants.drain(..).map(async move |(p, u)| {
-			let user = gamma_client.get_user(&u.cid).await.unwrap();
-			let languages = github_client
-				.get_languages(p.github.as_ref().unwrap())
-				.await
-				.unwrap();
-			LeaderboardLanguagesResponse {
+			let user = gamma_client.get_user(&u.cid).await.map_err(|e| {
+				println!(
+					"Could not get user {} when loading leaderboard ({}:{})\n\t{:?}",
+					u.cid,
+					file!(),
+					line!(),
+					e
+				);
+			})?;
+			let github = p.github.as_ref().unwrap();
+			let languages = github_client.get_languages(github).await.map_err(|e| {
+				println!(
+					"Could not get repo {:?} when loading leaderboard ({}:{})\n\t{:?}",
+					github,
+					file!(),
+					line!(),
+					e
+				);
+			})?;
+			Ok(LeaderboardLanguagesResponse {
 				cid: u.cid.clone(),
 				nick: user.nick,
 				avatar_url: user.avatar_url,
 				github: p.github,
 				languages: languages.into_keys().collect(),
-			}
+			})
 		}))
 		.await;
+	let mut response: Vec<_> = response.drain(..).filter_map(|r| r.ok()).collect();
 	response.sort_by_key(|lr| Reverse(lr.languages.len()));
 
 	cache_leaderboard(
