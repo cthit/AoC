@@ -21,6 +21,6 @@ CREATE TABLE IF NOT EXISTS Participants (
 
 	UNIQUE (cid, year),
 
-	FOREIGN KEY (cid) REFERENCES Users(cid),
-	FOREIGN KEY (year) REFERENCES Years(year)
+	FOREIGN KEY (cid) REFERENCES Users(cid) ON DELETE CASCADE,
+	FOREIGN KEY (year) REFERENCES Years(year) ON DELETE CASCADE
 );
