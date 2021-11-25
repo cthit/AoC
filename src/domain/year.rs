@@ -19,7 +19,7 @@ pub async fn get_years(conn: &DbConn) -> Result<Vec<YearResponse>, Status> {
 		.drain(..)
 		.map(|y| YearResponse {
 			year: y.year,
-			leaderboard: y.leaderboard,
+			leaderboard: y.leaderboard_id().to_owned(),
 		})
 		.collect())
 }
@@ -30,6 +30,14 @@ pub async fn set_year(
 	cookies: &CookieJar<'_>,
 	gamma_client: &GammaClient,
 ) -> Result<(), Status> {
+	let leaderboard_split: Vec<_> = data.leaderboard.split('-').collect();
+	if leaderboard_split.len() != 2
+		|| !leaderboard_split[0].chars().all(char::is_numeric)
+		|| !leaderboard_split[1].chars().all(char::is_alphanumeric)
+	{
+		return Err(Status::BadRequest);
+	}
+
 	let access_cookie = cookies
 		.get(GammaClient::cookie())
 		.ok_or(Status::Unauthorized)?;

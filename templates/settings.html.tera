@@ -27,7 +27,7 @@
 	<form action="/years" method="post">
 		<p>Do you wish to add a new year?</p>
 		<input type="text" name="year" placeholder="Year" required pattern="\d{4}" title="Enter 4-digit year">
-		<input type="text" name="leaderboard" placeholder="Leaderboard ID" required pattern="\d+" title="Enter the number combination ID">
+		<input type="text" name="leaderboard" placeholder="Leaderboard join code" required pattern="\d+-\w+" title="Enter number ID dash alphanumeric secret">
 		<button type="submit">Add</button>
 	</form>
 	{% for year in data.owner.years %}

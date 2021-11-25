@@ -42,6 +42,12 @@ pub struct Year {
 	pub leaderboard: String,
 }
 
+impl Year {
+	pub fn leaderboard_id(&self) -> &str {
+		self.leaderboard.split('-').next().unwrap()
+	}
+}
+
 table! {
 	participants (cid, year) {
 		cid -> Text,

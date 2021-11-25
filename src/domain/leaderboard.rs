@@ -94,7 +94,7 @@ pub async fn get_leaderboard(
 		})?;
 
 	let leaderboard = aoc_client
-		.get_leaderboard(year, &year_db.leaderboard)
+		.get_leaderboard(year, year_db.leaderboard_id())
 		.await
 		.map_err(|err| {
 			println!("Could not find on AoC: {:?}", err);
@@ -158,7 +158,7 @@ pub async fn get_leaderboard_splits(
 		})?;
 
 	let leaderboard = aoc_client
-		.get_leaderboard(year, &year_db.leaderboard)
+		.get_leaderboard(year, year_db.leaderboard_id())
 		.await
 		.map_err(|err| {
 			println!("Could not find on AoC: {:?}", err);
