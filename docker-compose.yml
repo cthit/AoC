@@ -17,7 +17,10 @@ services:
       GITHUB_CLIENT_ID: id
       GITHUB_CLIENT_SECRET: secret
       ROCKET_ADDRESS: '0.0.0.0'
-      ROCKET_DATABASES: '{ aoc = { url = "postgres://user:password@aoc-db/aoc" } }'
+      ROCKET_DATABASES: '{ sql = { url = "postgres://user:password@aoc-db/aoc" }, redis = { url = "redis://aoc-redis" } }'
+      LEADERBOARD_CACHE_TIME: '5'
+      LEADERBOARD_SPLITS_CACHE_TIME: '5'
+      LEADERBOARD_LANGUAGES_CACHE_TIME: '5'
     ports:
       - 8000:8000
 
@@ -27,6 +30,9 @@ services:
       POSTGRES_DB: aoc
       POSTGRES_USER: user
       POSTGRES_PASSWORD: password
+
+  aoc-redis:
+    image: redis:5.0
 
   gamma-frontend:
     image: cthit/gamma-frontend:development

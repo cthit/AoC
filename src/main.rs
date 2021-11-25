@@ -5,6 +5,7 @@ mod db;
 mod domain;
 mod gamma;
 mod github_client;
+mod redis;
 
 #[macro_use]
 extern crate diesel;
@@ -43,6 +44,7 @@ use domain::{
 };
 use gamma::GammaClient;
 use github_client::GitHubClient;
+use redis::RedisConn;
 use rocket::{
 	fairing::AdHoc,
 	form::Form,
@@ -244,6 +246,7 @@ async fn redirect_leaderboard(conn: DbConn) -> Result<Redirect, Status> {
 async fn get_leaderboard_year_json(
 	mut year: String,
 	conn: DbConn,
+	redis: RedisConn,
 	cookies: &CookieJar<'_>,
 	aoc_client: &AocClient,
 	gamma_client: &GammaClient,
@@ -260,7 +263,7 @@ async fn get_leaderboard_year_json(
 		Status::NotFound
 	})?;
 
-	let mut leaderboard = get_leaderboard(year, &conn, aoc_client, gamma_client).await?;
+	let mut leaderboard = get_leaderboard(year, &conn, &redis, aoc_client, gamma_client).await?;
 
 	if is_json {
 		Ok(JsonOrTemplateLeaderboard::json(leaderboard))
@@ -289,10 +292,11 @@ async fn get_leaderboard_year_json(
 async fn get_leaderboard_year_splits_json(
 	year: i32,
 	conn: DbConn,
+	redis: RedisConn,
 	aoc_client: &AocClient,
 	gamma_client: &GammaClient,
 ) -> Result<Json<Vec<LeaderboardSplitsResponse>>, Status> {
-	get_leaderboard_splits(year, &conn, aoc_client, gamma_client)
+	get_leaderboard_splits(year, &conn, &redis, aoc_client, gamma_client)
 		.await
 		.map(Json)
 }
@@ -301,11 +305,13 @@ async fn get_leaderboard_year_splits_json(
 async fn get_leaderboard_year_splits(
 	year: i32,
 	conn: DbConn,
+	redis: RedisConn,
 	cookies: &CookieJar<'_>,
 	aoc_client: &AocClient,
 	gamma_client: &GammaClient,
 ) -> Result<Template, Status> {
-	let mut leaderboard = get_leaderboard_splits(year, &conn, aoc_client, gamma_client).await?;
+	let mut leaderboard =
+		get_leaderboard_splits(year, &conn, &redis, aoc_client, gamma_client).await?;
 
 	let context = create_base_context(
 		LeaderboardContext {
@@ -328,10 +334,11 @@ async fn get_leaderboard_year_splits(
 async fn get_leaderboard_year_languages_json(
 	year: i32,
 	conn: DbConn,
+	redis: RedisConn,
 	gamma_client: &GammaClient,
 	github_client: &GitHubClient,
 ) -> Result<Json<Vec<LeaderboardLanguagesResponse>>, Status> {
-	get_leaderboard_languages(year, &conn, gamma_client, github_client)
+	get_leaderboard_languages(year, &conn, &redis, gamma_client, github_client)
 		.await
 		.map(Json)
 }
@@ -340,12 +347,13 @@ async fn get_leaderboard_year_languages_json(
 async fn get_leaderboard_year_languages(
 	year: i32,
 	conn: DbConn,
+	redis: RedisConn,
 	cookies: &CookieJar<'_>,
 	gamma_client: &GammaClient,
 	github_client: &GitHubClient,
 ) -> Result<Template, Status> {
 	let mut leaderboard =
-		get_leaderboard_languages(year, &conn, gamma_client, github_client).await?;
+		get_leaderboard_languages(year, &conn, &redis, gamma_client, github_client).await?;
 
 	let context = create_base_context(
 		LeaderboardContext {
@@ -477,6 +485,7 @@ fn rocket() -> Rocket<Build> {
 	rocket::build()
 		.attach(Template::fairing())
 		.attach(DbConn::fairing())
+		.attach(RedisConn::fairing())
 		.attach(AdHoc::on_liftoff("Initialize the AoC database", |rocket| {
 			Box::pin(async move {
 				if let Err(e) = db::initialize(rocket).await {

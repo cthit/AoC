@@ -9,7 +9,7 @@ use diesel::{
 };
 use rocket_sync_db_pools::database;
 
-#[database("aoc")]
+#[database("sql")]
 pub struct DbConn(PgConnection);
 
 table! {
