@@ -25,7 +25,8 @@ variables are described here.
 
 ### `GAMMA_OWNER_GROUP`
 
-This is the super group from Gamma that should have admin rights.
+This is a comma separated list of super groups from Gamma that should have admin
+rights.
 
 ### `AOC_SESSION`
 

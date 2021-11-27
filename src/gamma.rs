@@ -53,8 +53,11 @@ lazy_static! {
 	.unwrap_or_else(|e| panic!("Failed to create the OAuth client. {}", e));
 	static ref GAMMA_COOKIE: String =
 		env::var("GAMMA_COOKIE").expect("Missing the GAMMA_COOKIE environment variable.");
-	static ref GAMMA_OWNER_GROUP: String =
-		env::var("GAMMA_OWNER_GROUP").expect("Missing the GAMMA_OWNER_GROUP environment variable.");
+	static ref GAMMA_OWNER_GROUP: Vec<String> = env::var("GAMMA_OWNER_GROUP")
+		.expect("Missing the GAMMA_OWNER_GROUP environment variable.")
+		.split(',')
+		.map(|s| s.trim().to_owned())
+		.collect();
 }
 
 pub struct GammaClient {
@@ -169,8 +172,8 @@ impl GammaClient {
 		&GAMMA_COOKIE
 	}
 
-	pub fn owner_group() -> &'static str {
-		&GAMMA_OWNER_GROUP
+	pub fn is_owner(name: &str) -> bool {
+		GAMMA_OWNER_GROUP.iter().any(|g| g == name)
 	}
 }
 

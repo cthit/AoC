@@ -470,7 +470,7 @@ async fn settings(
 				.groups
 				.ok_or(Status::Forbidden)?
 				.iter()
-				.any(|g| g.name == GammaClient::owner_group())
+				.any(|g| GammaClient::is_owner(&g.super_group.name))
 			{
 				Some(OwnerContext {
 					years: get_years(&conn).await?,

@@ -73,7 +73,7 @@ pub async fn set_year(
 		.groups
 		.ok_or(Status::Forbidden)?
 		.iter()
-		.any(|g| g.name == GammaClient::owner_group())
+		.any(|g| GammaClient::is_owner(&g.super_group.name))
 	{
 		return Err(Status::Forbidden);
 	}
@@ -110,7 +110,7 @@ pub async fn delete_year(
 		.groups
 		.ok_or(Status::Forbidden)?
 		.iter()
-		.any(|g| g.name == GammaClient::owner_group())
+		.any(|g| GammaClient::is_owner(&g.super_group.name))
 	{
 		return Err(Status::Forbidden);
 	}
