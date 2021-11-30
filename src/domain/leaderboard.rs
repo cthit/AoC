@@ -127,12 +127,17 @@ pub async fn get_leaderboard(
 	let mut response: Vec<Result<_, ()>> = futures::future::join_all(
 		participants
 			.drain(..)
-			.map(|(p, u)| LeaderboardResponse {
-				cid: u.cid.clone(),
-				nick: String::new(),
-				avatar_url: String::new(),
-				github: p.github,
-				score: leaderboard.members[&u.aoc_id].local_score,
+			.filter_map(|(p, u)| {
+				leaderboard
+					.members
+					.get(&u.aoc_id)
+					.map(|m| LeaderboardResponse {
+						cid: u.cid.clone(),
+						nick: String::new(),
+						avatar_url: String::new(),
+						github: p.github,
+						score: m.local_score,
+					})
 			})
 			.map(async move |mut lr| {
 				let user = gamma_client.get_user(&lr.cid).await.map_err(|e| {
@@ -213,7 +218,8 @@ pub async fn get_leaderboard_splits(
 	let mut response: Vec<Result<_, ()>> = futures::future::join_all(
 		participants
 			.drain(..)
-			.map(|(p, u)| {
+			.filter_map(|(p, u)| leaderboard.members.get(&u.aoc_id).map(|m| (m, p, u)))
+			.map(|(m, p, u)| {
 				const ONE_DAY: u64 = 24 * 60 * 60;
 				let current = match SystemTime::now().duration_since(SystemTime::UNIX_EPOCH) {
 					Ok(dur) => dur.as_secs() as u64,
@@ -221,11 +227,11 @@ pub async fn get_leaderboard_splits(
 				};
 				let mut split_count = 0;
 				LeaderboardSplitsResponse {
-					cid: u.cid.clone(),
+					cid: u.cid,
 					nick: String::new(),
 					avatar_url: String::new(),
 					github: p.github,
-					split_average: leaderboard.members[&u.aoc_id]
+					split_average: m
 						.completion_day_level
 						.values()
 						.filter_map(|d| match (d.first_star_ts, d.second_star_ts) {
