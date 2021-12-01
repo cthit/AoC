@@ -20,7 +20,7 @@
 				<span>{{ placement.value }}</span>
 				<span><img src="{{ placement.avatarUrl }}" height="20px"/></span>
 				{% if placement.github is defined -%}
-					<a href="{{ placement.github }}" target="_blank">{{ placement.nick }}</a>
+					<a href="https://github.com/{{ placement.github }}" target="_blank">{{ placement.nick }}</a>
 				{% else -%}
 					<span>{{ placement.nick }}</span>
 				{% endif -%}
