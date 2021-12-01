@@ -37,19 +37,33 @@ lazy_static! {
 async fn fetch_from_cache<T: DeserializeOwned>(
 	redis: &RedisConn,
 	key: &str,
-) -> Result<Option<Vec<T>>, Status> {
+) -> Result<Option<(Vec<T>, usize)>, Status> {
 	let key_copy = key.to_owned();
-	if let Some(cached) = redis
-		.run(move |c| c.get::<_, Option<String>>(key_copy))
+	let cache_result = redis
+		.run(move |c| {
+			c.get::<_, Option<String>>(key_copy.clone())
+				.map(|possible_cache| {
+					if let Some(cached) = possible_cache {
+						c.ttl(key_copy).map(|ttl| Some((cached, ttl)))
+					} else {
+						Ok(None)
+					}
+				})
+		})
 		.await
 		.map_err(|e| {
 			println!("Redis error: {}", e);
 			Status::InternalServerError
-		})? {
+		})?
+		.map_err(|e| {
+			println!("Redis error: {}", e);
+			Status::InternalServerError
+		})?;
+	if let Some((cached, ttl)) = cache_result {
 		if let Ok(cached) = serde_json::from_str::<Vec<T>>(&cached).map_err(|e| {
 			println!("Malformatted redis value: {}", e);
 		}) {
-			return Ok(Some(cached));
+			return Ok(Some((cached, ttl)));
 		}
 	}
 
@@ -78,11 +92,11 @@ pub async fn get_leaderboard(
 	redis: &RedisConn,
 	aoc_client: &AocClient,
 	gamma_client: &GammaClient,
-) -> Result<Vec<LeaderboardResponse>, Status> {
+) -> Result<(Vec<LeaderboardResponse>, usize), Status> {
 	let redis_key = format!("leaderboard_{}", year);
 
-	if let Some(cached) = fetch_from_cache(redis, &redis_key).await? {
-		return Ok(cached);
+	if let Some((cached, ttl)) = fetch_from_cache(redis, &redis_key).await? {
+		return Ok((cached, ttl));
 	}
 
 	let year_db: Year = conn
@@ -160,7 +174,7 @@ pub async fn get_leaderboard(
 
 	cache_leaderboard(redis, redis_key, &response, *LEADERBOARD_CACHE_TIME).await;
 
-	Ok(response)
+	Ok((response, *LEADERBOARD_CACHE_TIME))
 }
 
 pub async fn get_leaderboard_splits(
@@ -169,11 +183,11 @@ pub async fn get_leaderboard_splits(
 	redis: &RedisConn,
 	aoc_client: &AocClient,
 	gamma_client: &GammaClient,
-) -> Result<Vec<LeaderboardSplitsResponse>, Status> {
+) -> Result<(Vec<LeaderboardSplitsResponse>, usize), Status> {
 	let redis_key = format!("leaderboard_splits_{}", year);
 
-	if let Some(cached) = fetch_from_cache(redis, &redis_key).await? {
-		return Ok(cached);
+	if let Some((cached, ttl)) = fetch_from_cache(redis, &redis_key).await? {
+		return Ok((cached, ttl));
 	}
 
 	let year_db: Year = conn
@@ -271,7 +285,7 @@ pub async fn get_leaderboard_splits(
 
 	cache_leaderboard(redis, redis_key, &response, *LEADERBOARD_SPLITS_CACHE_TIME).await;
 
-	Ok(response)
+	Ok((response, *LEADERBOARD_SPLITS_CACHE_TIME))
 }
 
 pub async fn get_leaderboard_languages(
@@ -280,11 +294,11 @@ pub async fn get_leaderboard_languages(
 	redis: &RedisConn,
 	gamma_client: &GammaClient,
 	github_client: &GitHubClient,
-) -> Result<Vec<LeaderboardLanguagesResponse>, Status> {
+) -> Result<(Vec<LeaderboardLanguagesResponse>, usize), Status> {
 	let redis_key = format!("leaderboard_languages_{}", year);
 
-	if let Some(cached) = fetch_from_cache(redis, &redis_key).await? {
-		return Ok(cached);
+	if let Some((cached, ttl)) = fetch_from_cache(redis, &redis_key).await? {
+		return Ok((cached, ttl));
 	}
 
 	let mut participants: Vec<(Participant, User)> = conn
@@ -348,7 +362,7 @@ pub async fn get_leaderboard_languages(
 	)
 	.await;
 
-	Ok(response)
+	Ok((response, *LEADERBOARD_LANGUAGES_CACHE_TIME))
 }
 
 #[derive(Deserialize, Serialize)]

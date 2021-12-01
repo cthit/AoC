@@ -44,6 +44,18 @@ pub struct LeaderboardContext {
 	pub join_code: Option<String>,
 	pub value_width: u8,
 	pub leaderboard: Vec<LeaderboardPlacementContext>,
+	pub next_update: String,
+}
+
+impl LeaderboardContext {
+	pub fn format_next_update(secs_til_next_update: usize) -> String {
+		format!(
+			"{:0>2}:{:0>2}:{:0>2}",
+			secs_til_next_update / (60 * 60),
+			(secs_til_next_update / 60) % 60,
+			secs_til_next_update % 60
+		)
+	}
 }
 
 #[derive(Serialize)]

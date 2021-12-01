@@ -27,5 +27,6 @@
 			</li>
 		{% endfor -%}
 	</ol>
+	<p>Leaderboard is cached. Next update in {{ data.nextUpdate }}.</p>
 </article>
 {% endblock content -%}

@@ -264,7 +264,8 @@ async fn get_leaderboard_year_json(
 		Status::NotFound
 	})?;
 
-	let mut leaderboard = get_leaderboard(year, &conn, &redis, aoc_client, gamma_client).await?;
+	let (mut leaderboard, secs_til_next_update) =
+		get_leaderboard(year, &conn, &redis, aoc_client, gamma_client).await?;
 
 	if is_json {
 		Ok(JsonOrTemplateLeaderboard::json(leaderboard))
@@ -283,6 +284,7 @@ async fn get_leaderboard_year_json(
 				value_width: 6,
 				join_code,
 				leaderboard: leaderboard.drain(..).map(From::from).collect(),
+				next_update: LeaderboardContext::format_next_update(secs_til_next_update),
 			},
 			cookies,
 			gamma_client,
@@ -305,7 +307,7 @@ async fn get_leaderboard_year_splits_json(
 ) -> Result<Json<Vec<LeaderboardSplitsResponse>>, Status> {
 	get_leaderboard_splits(year, &conn, &redis, aoc_client, gamma_client)
 		.await
-		.map(Json)
+		.map(|(leaderboard, _)| Json(leaderboard))
 }
 
 #[get("/leaderboard/<year>/splits")]
@@ -317,7 +319,7 @@ async fn get_leaderboard_year_splits(
 	aoc_client: &AocClient,
 	gamma_client: &GammaClient,
 ) -> Result<Template, Status> {
-	let mut leaderboard =
+	let (mut leaderboard, secs_til_next_update) =
 		get_leaderboard_splits(year, &conn, &redis, aoc_client, gamma_client).await?;
 
 	let join_code = get_year(year, &conn, cookies, gamma_client)
@@ -335,6 +337,7 @@ async fn get_leaderboard_year_splits(
 			value_width: 8,
 			join_code,
 			leaderboard: leaderboard.drain(..).map(From::from).collect(),
+			next_update: LeaderboardContext::format_next_update(secs_til_next_update),
 		},
 		cookies,
 		gamma_client,
@@ -353,7 +356,7 @@ async fn get_leaderboard_year_languages_json(
 ) -> Result<Json<Vec<LeaderboardLanguagesResponse>>, Status> {
 	get_leaderboard_languages(year, &conn, &redis, gamma_client, github_client)
 		.await
-		.map(Json)
+		.map(|(leaderboard, _)| Json(leaderboard))
 }
 
 #[get("/leaderboard/<year>/languages")]
@@ -365,7 +368,7 @@ async fn get_leaderboard_year_languages(
 	gamma_client: &GammaClient,
 	github_client: &GitHubClient,
 ) -> Result<Template, Status> {
-	let mut leaderboard =
+	let (mut leaderboard, secs_til_next_update) =
 		get_leaderboard_languages(year, &conn, &redis, gamma_client, github_client).await?;
 
 	let join_code = get_year(year, &conn, cookies, gamma_client)
@@ -383,6 +386,7 @@ async fn get_leaderboard_year_languages(
 			value_width: 3,
 			join_code,
 			leaderboard: leaderboard.drain(..).map(From::from).collect(),
+			next_update: LeaderboardContext::format_next_update(secs_til_next_update),
 		},
 		cookies,
 		gamma_client,
