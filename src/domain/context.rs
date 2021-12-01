@@ -63,7 +63,7 @@ impl LeaderboardContext {
 pub struct LeaderboardPlacementContext {
 	pub nick: String,
 	pub avatar_url: String,
-	#[serde(skip_serializing_if = "Option::is_none")]
+	#[serde(skip_serializing_if = "is_none_or_empty")]
 	pub github: Option<String>,
 	pub value: String,
 }
@@ -108,4 +108,8 @@ impl From<LeaderboardLanguagesResponse> for LeaderboardPlacementContext {
 			value: lr.languages.len().to_string(),
 		}
 	}
+}
+
+fn is_none_or_empty(s: &Option<String>) -> bool {
+	s.is_none() || s.as_ref().unwrap().is_empty()
 }
