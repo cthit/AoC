@@ -73,12 +73,16 @@ impl From<LeaderboardSplitsResponse> for LeaderboardPlacementContext {
 			nick: lr.nick,
 			avatar_url: lr.avatar_url,
 			github: lr.github,
-			value: format!(
-				"{:0>2}:{:0>2}:{:0>2}",
-				(lr.split_average / (60 * 60)) % 24,
-				(lr.split_average / 60) % 60,
-				lr.split_average % 60
-			),
+			value: if lr.split_average >= 60 * 60 * 24 {
+				"--:--:--".to_string()
+			} else {
+				format!(
+					"{:0>2}:{:0>2}:{:0>2}",
+					(lr.split_average / (60 * 60)) % 24,
+					(lr.split_average / 60) % 60,
+					lr.split_average % 60
+				)
+			},
 		}
 	}
 }
