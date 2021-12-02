@@ -2,7 +2,7 @@
 {% block content -%}
 <article>
 	<p>Hi! Christmas Smurf here. You're probably wondering what this is all about. So let me tell you. Advent of digIT is a custom leaderboard for Advent of Code. That didn't help very much, did it?</p>
-	<p>Let me tell you about <a>Advent of Code</a>. It is an Advent calender containing a programming puzzle for each day of December until Christmas Day. How fun!</p>
+	<p>Let me tell you about <a href="https://adventofcode.com">Advent of Code</a>. It is an Advent calender containing a programming puzzle for each day of December until Christmas Day. How fun!</p>
 	<p>Now how does Advent of <em>digIT</em> come into the picture? Well, AoC has leaderboards but the existing once simply aren't fun! <span title="It might also exist because a certain digIT member wanted to feel useful">Ao<em>d</em> has multiple different leaderboards</span>. If you don't feel like waking up early you might place better on the splits leaderboard.</p>
 	<h2>How do I get started?</h2>
 	<p>I'm glad you asked! If you want to participate in Ao<em>d</em> you must first create an account on AoC. When you've done that you can log in to Ao<em>d</em> with your Gamma account and link the two accounts.</p>
