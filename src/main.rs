@@ -330,11 +330,11 @@ async fn get_leaderboard_year_splits(
 	let context = create_base_context(
 		LeaderboardContext {
 			year,
-			description: "The leaderboard ranks players according to split time, the time between \
-			              completing puzzle one and two of each day. If you like sleep, this \
-			              might be the leaderboard for you."
+			description: "This leaderboard ranks players according to split time, the player with \
+			              the shortest split each day earns the most points. If you like sleep, \
+			              this might be the leaderboard for you."
 				.into(),
-			value_width: 8,
+			value_width: 6,
 			join_code,
 			leaderboard: leaderboard.drain(..).map(From::from).collect(),
 			next_update: LeaderboardContext::format_next_update(secs_til_next_update),

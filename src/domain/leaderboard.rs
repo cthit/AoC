@@ -1,4 +1,4 @@
-use std::{cmp::Reverse, time::SystemTime};
+use std::{cmp::Reverse, collections::HashMap};
 
 use diesel::{expression_methods::ExpressionMethods, query_dsl::QueryDsl, RunQueryDsl};
 use lazy_static::lazy_static;
@@ -211,7 +211,7 @@ pub async fn get_leaderboard_splits(
 			Status::InternalServerError
 		})?;
 
-	let mut participants: Vec<(Participant, User)> = conn
+	let participants: Vec<(Participant, User)> = conn
 		.run(move |c| {
 			participants::table
 				.inner_join(users::table)
@@ -229,40 +229,20 @@ pub async fn get_leaderboard_splits(
 			Status::InternalServerError
 		})?;
 
-	let mut response: Vec<Result<_, ()>> = futures::future::join_all(
-		participants
-			.drain(..)
-			.filter_map(|(p, u)| leaderboard.members.get(&u.aoc_id).map(|m| (m, p, u)))
-			.map(|(m, p, u)| {
-				const ONE_DAY: u64 = 24 * 60 * 60;
-				let current = match SystemTime::now().duration_since(SystemTime::UNIX_EPOCH) {
-					Ok(dur) => dur.as_secs() as u64,
-					Err(_) => panic!("SystemTime before UNIX EPOCH!"),
-				};
-				let mut split_count = 0;
-				LeaderboardSplitsResponse {
-					cid: u.cid,
-					nick: String::new(),
-					avatar_url: String::new(),
-					github: p.github,
-					split_average: m
-						.completion_day_level
-						.values()
-						.filter_map(|d| match (d.first_star_ts, d.second_star_ts) {
-							(Some(first), Some(second)) => {
-								split_count += 1;
-								Some((second - first).min(ONE_DAY))
-							}
-							(Some(first), None) => {
-								split_count += 1;
-								Some((current - first).min(ONE_DAY))
-							}
-							_ => None,
-						})
-						.sum::<u64>()
-						.checked_div(split_count)
-						.unwrap_or(ONE_DAY),
-				}
+	let unprocessed_members: Vec<_> = participants
+		.into_iter()
+		.filter_map(|(p, u)| leaderboard.members.get(&u.aoc_id).map(|m| (m, p, u)))
+		.collect();
+
+	let mut members: Vec<Result<_, ()>> = futures::future::join_all(
+		unprocessed_members
+			.iter()
+			.map(|(_, p, u)| LeaderboardSplitsResponse {
+				cid: u.cid.to_owned(),
+				nick: String::new(),
+				avatar_url: String::new(),
+				github: p.github.to_owned(),
+				score: 0,
 			})
 			.map(async move |mut lr| {
 				let user = gamma_client.get_user(&lr.cid).await.map_err(|e| {
@@ -280,8 +260,38 @@ pub async fn get_leaderboard_splits(
 			}),
 	)
 	.await;
-	let mut response: Vec<_> = response.drain(..).filter_map(|r| r.ok()).collect();
-	response.sort_by_key(|lr| lr.split_average);
+	let mut members: HashMap<_, _> = members
+		.drain(..)
+		.filter_map(|r| r.ok().map(|m| (m.cid.to_owned(), m)))
+		.collect();
+
+	let total_members = members.len() as u16;
+	let mut day_vec = Vec::new();
+	for day in 1..=25 {
+		let day_str = day.to_string();
+
+		day_vec.extend(unprocessed_members.iter().filter_map(|(m, _, u)| {
+			m.completion_day_level
+				.get(&day_str)
+				.map(|d| match (d.first_star_ts, d.second_star_ts) {
+					(Some(f), Some(s)) => Some((&u.cid, s - f)),
+					_ => None,
+				})
+				.flatten()
+		}));
+		day_vec.sort_by_key(|&(_, split)| split);
+
+		for (i, (cid, _)) in day_vec.iter().enumerate() {
+			if let Some(m) = members.get_mut(*cid) {
+				m.score += total_members - i as u16;
+			}
+		}
+
+		day_vec.clear();
+	}
+
+	let mut response: Vec<_> = members.drain().map(|(_, v)| v).collect();
+	response.sort_by_key(|lr| Reverse(lr.score));
 
 	cache_leaderboard(redis, redis_key, &response, *LEADERBOARD_SPLITS_CACHE_TIME).await;
 
@@ -394,7 +404,7 @@ pub struct LeaderboardSplitsResponse {
 	pub nick: String,
 	pub avatar_url: String,
 	pub github: Option<String>,
-	pub split_average: u64,
+	pub score: u16,
 }
 
 #[derive(Deserialize, Serialize)]
