@@ -18,7 +18,7 @@
 		{% for placement in data.leaderboard -%}
 			<li>
 				<span>{{ placement.value }}</span>
-				<span><img src="{{ placement.avatarUrl }}" height="20px"/></span>
+				<span style="background-image: url({{ placement.avatarUrl }})"></span>
 				{% if placement.github is defined -%}
 					<a href="https://github.com/{{ placement.github }}" target="_blank">{{ placement.nick }}</a>
 				{% else -%}
