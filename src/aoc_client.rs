@@ -56,40 +56,13 @@ impl<'r> FromRequest<'r> for &'static AocClient {
 
 #[derive(Deserialize, Serialize)]
 pub struct Leaderboard {
-	pub event: String,
-	pub owner_id: String,
 	pub members: HashMap<String, Member>,
 }
 
 #[derive(Deserialize, Serialize)]
 pub struct Member {
-	pub stars: u8,
-	#[serde(default)]
-	pub name: Option<String>,
-	#[serde(deserialize_with = "string_or_u64")]
-	pub last_star_ts: u64,
 	pub completion_day_level: HashMap<String, Day>,
-	pub id: String,
 	pub local_score: u16,
-	pub global_score: u16,
-}
-
-fn string_or_u64<'de, D>(deserializer: D) -> Result<u64, D::Error>
-where
-	D: serde::Deserializer<'de>,
-{
-	let sou = StringOrU64::deserialize(deserializer)?;
-	match sou {
-		StringOrU64::String(s) => s.parse::<u64>().map_err(serde::de::Error::custom),
-		StringOrU64::U64(u) => Ok(u),
-	}
-}
-
-#[derive(Deserialize)]
-#[serde(untagged)]
-enum StringOrU64 {
-	U64(u64),
-	String(String),
 }
 
 #[derive(Deserialize, Serialize)]
