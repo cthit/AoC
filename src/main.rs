@@ -403,13 +403,31 @@ async fn callback(
 	gamma_client: &GammaClient,
 ) -> Result<Redirect, Status> {
 	let access_token = gamma_client
-		.get_token(code)
+		.get_token(code.clone())
 		.await
-		.map_err(|_| Status::Unauthorized)?;
+		.map_err(|e| {
+			println!(
+				"Could not get token for code {} ({}:{})\n\t{:?}",
+				code,
+				file!(),
+				line!(),
+				e
+			);
+			Status::Unauthorized
+		})?;
 	gamma_client
 		.get_me(&access_token)
 		.await
-		.map_err(|_| Status::Unauthorized)?;
+		.map_err(|e| {
+			println!(
+				"Could not get \"me\" info with access token {} ({}:{})\n\t{:?}",
+				access_token,
+				file!(),
+				line!(),
+				e
+			);
+			Status::Unauthorized
+		})?;
 	cookies.add(
 		Cookie::build(GammaClient::cookie(), access_token)
 			.path("/")
