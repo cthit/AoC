@@ -257,25 +257,15 @@ impl<TA: Error, TB: Error, TC: Error, TD: Error> Display for GammaError<TA, TB, 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ITUser {
-	pub id: String,
 	pub cid: String,
 	pub nick: String,
 	pub avatar_url: String,
-	pub acceptance_year: u16,
-	#[serde(default)]
-	pub language: Option<String>,
 	pub groups: Option<Vec<FKITGroup>>,
 }
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct FKITGroup {
-	pub id: String,
-	pub becomes_active: u64,
-	pub becomes_inactive: u64,
-	pub name: String,
-	pub pretty_name: String,
-	pub avatar_url: Option<String>,
 	pub super_group: FKITSuperGroup,
 }
 
@@ -284,14 +274,4 @@ pub struct FKITGroup {
 pub struct FKITSuperGroup {
 	pub id: String,
 	pub name: String,
-	pub pretty_name: String,
-	pub r#type: GroupType,
-}
-
-#[derive(Deserialize)]
-#[serde(rename_all = "UPPERCASE")]
-pub enum GroupType {
-	Committee,
-	Society,
-	Alumni,
 }
